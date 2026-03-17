@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Boom Dynamics V2 — Multi-Sensor Live View</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.3.4/mqtt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#f8fafc;
+  --bg-alt:#f1f5f9;
+  --card:#ffffff;
+  --border:#e2e8f0;
+  --border-dark:#cbd5e1;
+  --accent:#0ea5e9;
+  --accent-light:#e0f2fe;
+  --purple:#8b5cf6;
+  --purple-light:#ede9fe;
+  --green:#10b981;
+  --green-light:#d1fae5;
+  --yellow:#f59e0b;
+  --yellow-light:#fef3c7;
+  --red:#ef4444;
+  --red-light:#fee2e2;
+  --text:#1e293b;
+  --text-muted:#64748b;
+  --mono:'JetBrains Mono',monospace;
+  --sans:'Inter',sans-serif;
+  --r:8px;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:15px}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+/* ── CONNECT ────────────────────────────────────────────────────────────────── */
+#connect-screen{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+  padding:1rem;
+}
+
+.cbox{
+  width:100%;
+  max-width:500px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:2rem;
+  box-shadow:0 4px 20px rgba(0,0,0,0.08);
+}
+
+.clogo{
+  font-size:1.8rem;
+  font-weight:700;
+  letter-spacing:-0.02em;
+  color:var(--accent);
+  margin-bottom:.3rem;
+}
+
+.clogo span{
+  color:var(--text-muted);
+  font-weight:400;
+}
+
+.csub{
+  font-size:.85rem;
+  color:var(--text-muted);
+  letter-spacing:.05em;
+  text-transform:uppercase;
+  margin-bottom:1.5rem;
+  font-weight:500;
+}
+
+.frow{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:1rem;
+  margin-bottom:1rem;
+}
+
+.fsingle{margin-bottom:1rem}
+
+.field label{
+  display:block;
+  font-size:.8rem;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+  color:var(--text-muted);
+  margin-bottom:.5rem;
+  font-weight:600;
+}
+
+.field input,
+.field select{
+  width:100%;
+  background:var(--bg-alt);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:.85rem;
+  padding:.7rem 1rem;
+  outline:none;
+  transition:all .2s;
+}
+
+.field input:focus,
+.field select:focus{
+  border-color:var(--accent);
+  background:#fff;
+  box-shadow:0 0 0 3px var(--accent-light);
+}
+
+.field select option{background:var(--card)}
+
+.info-bar{
+  background:var(--accent-light);
+  border:1px solid var(--accent);
+  border-radius:var(--r);
+  padding:1rem;
+  margin-bottom:1rem;
+  font-family:var(--mono);
+  font-size:.8rem;
+  color:var(--accent);
+  line-height:1.6;
+}
+
+.info-bar strong{
+  font-weight:600;
+  color:var(--text);
+}
+
+.btn-primary{
+  width:100%;
+  background:linear-gradient(135deg, var(--accent), #0284c7);
+  color:#fff;
+  font-family:var(--sans);
+  font-size:.95rem;
+  font-weight:600;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+  border:none;
+  border-radius:var(--r);
+  padding:1rem;
+  cursor:pointer;
+  transition:all .2s;
+  margin-top:.5rem;
+}
+
+.btn-primary:hover{
+  transform:translateY(-2px);
+  box-shadow:0 8px 16px rgba(14, 165, 233, 0.3);
+}
+
+.cnote{
+  margin-top:1rem;
+  font-size:.8rem;
+  color:var(--text-muted);
+  line-height:1.7;
+}
+
+.cnote code{
+  background:var(--bg-alt);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:.2rem .4rem;
+  font-family:var(--mono);
+}
+
+/* ── DASHBOARD ──────────────────────────────────────────────────────────────── */
+#dashboard{display:none;flex-direction:column;min-height:100vh}
+#dashboard.show{display:flex}
+
+/* NAV */
+nav{
+  height:60px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 1.5rem;
+  background:var(--card);
+  border-bottom:1px solid var(--border);
+  box-shadow:0 1px 3px rgba(0,0,0,0.05);
+  position:sticky;
+  top:0;
+  z-index:200;
+  flex-shrink:0;
+}
+
+.nav-brand{
+  font-size:1.2rem;
+  font-weight:700;
+  letter-spacing:-0.02em;
+  color:var(--accent);
+}
+
+.nav-brand em{
+  color:var(--text-muted);
+  font-style:normal;
+  font-weight:400;
+  font-size:.85rem;
+  margin-left:.5rem;
+}
+
+.nav-right{
+  display:flex;
+  align-items:center;
+  gap:1.5rem;
+}
+
+.badge{
+  display:flex;
+  align-items:center;
+  gap:.4rem;
+  font-family:var(--mono);
+  font-size:.75rem;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+  padding:.4rem .8rem;
+  border-radius:20px;
+  border:1.5px solid currentColor;
+  transition:all .3s;
+  font-weight:600;
+}
+
+.badge .dot{
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:currentColor;
+  animation:pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+.badge.ok{color:var(--green)}
+.badge.mid{color:var(--yellow)}
+.badge.bad{color:var(--red)}
+
+.topic-pill{
+  font-family:var(--mono);
+  font-size:.75rem;
+  background:var(--purple-light);
+  border:1px solid var(--purple);
+  color:var(--purple);
+  border-radius:4px;
+  padding:.25rem .7rem;
+  font-weight:600;
+}
+
+#nav-clock{
+  font-family:var(--mono);
+  font-size:.8rem;
+  color:var(--text-muted);
+  font-weight:500;
+}
+
+.btn-disc{
+  font-family:var(--sans);
+  font-size:.75rem;
+  font-weight:600;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+  background:transparent;
+  border:1.5px solid var(--border);
+  color:var(--text-muted);
+  border-radius:var(--r);
+  padding:.4rem 1rem;
+  cursor:pointer;
+  transition:all .2s;
+}
+
+.btn-disc:hover{
+  border-color:var(--red);
+  color:var(--red);
+  background:var(--red-light);
+}
+
+/* CONTENT */
+.content{
+  flex:1;
+  padding:1.5rem;
+  display:flex;
+  flex-direction:column;
+  gap:1.5rem;
+  overflow-y:auto;
+  background:var(--bg-alt);
+}
+
+.sec-hd{
+  font-size:.85rem;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--text-muted);
+  font-weight:700;
+  padding-bottom:.5rem;
+  margin-bottom:1rem;
+}
+
+/* GRID */
+.sensors-grid{
+  display:grid;
+  grid-template-columns:repeat(4, 1fr);
+  gap:1.2rem;
+}
+
+.sensor-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  padding:1.2rem;
+  display:flex;
+  flex-direction:column;
+  gap:1rem;
+  box-shadow:0 1px 3px rgba(0,0,0,0.05);
+  transition:all .3s;
+}
+
+.sensor-card:hover{
+  box-shadow:0 4px 12px rgba(0,0,0,0.08);
+  border-color:var(--accent);
+}
+
+.sensor-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+
+.sensor-name{
+  font-size:1rem;
+  font-weight:700;
+  color:var(--text);
+  text-transform:capitalize;
+  letter-spacing:.02em;
+}
+
+.sensor-badge{
+  display:flex;
+  align-items:center;
+  gap:.3rem;
+  font-size:.7rem;
+  font-weight:600;
+  padding:.25rem .6rem;
+  border-radius:12px;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+
+.sensor-badge.ok{
+  background:var(--green-light);
+  color:var(--green);
+  border:1px solid var(--green);
+}
+
+.sensor-badge.warn{
+  background:var(--yellow-light);
+  color:var(--yellow);
+  border:1px solid var(--yellow);
+}
+
+.sensor-badge.err{
+  background:var(--red-light);
+  color:var(--red);
+  border:1px solid var(--red);
+}
+
+.sensor-badge .dot{
+  width:4px;
+  height:4px;
+  border-radius:50%;
+  background:currentColor;
+}
+
+/* ATTITUDE INDICATOR */
+.horizon-container{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  margin:0.5rem 0;
+}
+
+.hz-ring{
+  position:relative;
+  width:140px;
+  height:140px;
+  border-radius:50%;
+  overflow:hidden;
+  border:2px solid var(--border-dark);
+  box-shadow:0 2px 8px rgba(0,0,0,0.1), inset 0 0 12px rgba(14, 165, 233, 0.08);
+  background:#fff;
+}
+
+.hz-ring canvas{display:block}
+
+/* PITCH/ROLL VALUES */
+.attitude-values{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:.6rem;
+  padding:.6rem 0;
+  border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+}
+
+.att-val{
+  display:flex;
+  flex-direction:column;
+  gap:.2rem;
+}
+
+.att-lbl{
+  font-size:.7rem;
+  font-weight:600;
+  color:var(--text-muted);
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+
+.att-num{
+  font-family:var(--mono);
+  font-size:1.4rem;
+  font-weight:700;
+  color:var(--accent);
+}
+
+.att-num.roll{color:var(--purple)}
+
+/* THRESHOLD */
+.threshold-indicators{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:.4rem;
+}
+
+.thr-indicator{
+  font-size:.7rem;
+  font-weight:600;
+  padding:.4rem .6rem;
+  border-radius:4px;
+  text-align:center;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  border:1px solid var(--border);
+  background:var(--bg-alt);
+  color:var(--text-muted);
+  transition:all .2s;
+}
+
+.thr-indicator.ok{
+  background:var(--green-light);
+  color:var(--green);
+  border-color:var(--green);
+}
+
+.thr-indicator.warn{
+  background:var(--yellow-light);
+  color:var(--yellow);
+  border-color:var(--yellow);
+}
+
+.thr-indicator.danger{
+  background:var(--red-light);
+  color:var(--red);
+  border-color:var(--red);
+  animation:pulse-danger .8s ease-in-out infinite;
+}
+
+@keyframes pulse-danger{
+  0%,100%{opacity:1}
+  50%{opacity:.6}
+}
+
+/* CHARTS SECTION */
+.charts-section{
+  margin-top:1.5rem;
+}
+
+.charts-grid{
+  display:grid;
+  grid-template-columns:repeat(4, 1fr);
+  gap:1.2rem;
+}
+
+.chart-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  padding:1rem;
+  box-shadow:0 1px 3px rgba(0,0,0,0.05);
+}
+
+.chart-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:.8rem;
+  padding-bottom:.6rem;
+  border-bottom:1px solid var(--border);
+}
+
+.chart-title{
+  font-size:.85rem;
+  font-weight:700;
+  color:var(--text);
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+
+.chart-tag{
+  font-size:.65rem;
+  background:var(--accent-light);
+  color:var(--accent);
+  border:1px solid var(--accent);
+  padding:.2rem .4rem;
+  border-radius:3px;
+  font-weight:600;
+}
+
+.chart-container{
+  position:relative;
+  height:120px;
+  margin-bottom:.6rem;
+}
+
+.chart-stats{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:.5rem;
+  font-size:.75rem;
+}
+
+.chart-stat{
+  display:flex;
+  flex-direction:column;
+  gap:.2rem;
+}
+
+.chart-stat-label{
+  color:var(--text-muted);
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+
+.chart-stat-value{
+  font-family:var(--mono);
+  font-size:.9rem;
+  font-weight:700;
+  color:var(--accent);
+}
+
+.chart-stat-value.roll{color:var(--purple)}
+
+/* STATS BAR */
+.stats-bar-top{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));
+  gap:1rem;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  padding:1.2rem;
+  box-shadow:0 1px 3px rgba(0,0,0,0.05);
+  margin-bottom:1.5rem;
+}
+
+.stat-item{
+  display:flex;
+  flex-direction:column;
+  gap:.4rem;
+}
+
+.stat-label{
+  font-size:.75rem;
+  font-weight:700;
+  color:var(--text-muted);
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+
+.stat-value{
+  font-family:var(--mono);
+  font-size:1.3rem;
+  font-weight:700;
+  color:var(--accent);
+}
+
+.stat-unit{
+  font-size:.7rem;
+  color:var(--text-muted);
+  font-weight:500;
+}
+
+/* RESPONSIVE */
+@media(max-width:1600px){
+  .sensors-grid{grid-template-columns:repeat(2, 1fr)}
+  .charts-grid{grid-template-columns:repeat(2, 1fr)}
+}
+
+@media(max-width:1024px){
+  .sensors-grid{grid-template-columns:repeat(2, 1fr)}
+  .charts-grid{grid-template-columns:repeat(2, 1fr)}
+  .content{padding:1rem}
+}
+
+@media(max-width:768px){
+  .sensors-grid{grid-template-columns:1fr}
+  .charts-grid{grid-template-columns:1fr}
+  nav{padding:0 1rem}
+  .nav-right{gap:0.8rem}
+  .content{padding:0.8rem}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ CONNECT ═══════════ -->
+<div id="connect-screen">
+  <div class="cbox">
+    <div class="clogo">Boom<span>Dynamics</span></div>
+    <div class="csub">Multi-Sensor IMU Live Analytics v2</div>
+
+    <div class="info-bar">
+      <strong>Configuration →</strong><br>
+      Broker: <strong>broker.emqx.io:8084</strong> | Topic: <strong>boom/nandi01/imu</strong>
+    </div>
+
+    <div class="frow">
+      <div class="field"><label>Broker Host</label><input id="cfg-host" value="broker.emqx.io"/></div>
+      <div class="field"><label>Protocol</label>
+        <select id="cfg-proto">
+          <option value="wss" selected>WSS TLS (8084)</option>
+          <option value="ws">WS Plain (8083)</option>
+        </select>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="field"><label>WebSocket Port</label><input id="cfg-port" type="number" value="8084"/></div>
+      <div class="field"><label>MQTT Version</label>
+        <select id="cfg-mqttver">
+          <option value="5" selected>MQTT v5</option>
+          <option value="4">MQTT v3.1.1</option>
+        </select>
+      </div>
+    </div>
+    <div class="fsingle field"><label>Base Topic</label><input id="cfg-topic" value="boom/nandi01"/></div>
+    <div class="frow">
+      <div class="field"><label>Username</label><input id="cfg-user" value="astra"/></div>
+      <div class="field"><label>Password</label><input id="cfg-pass" type="password" value="astra"/></div>
+    </div>
+
+    <button class="btn-primary" id="btn-connect">→ Connect & Start</button>
+
+    <div class="cnote">
+      Payload: <code>{"left":{...}, "right":{...}, "center":{...}, "chassis":{...}}</code>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ DASHBOARD ═══════════ -->
+<div id="dashboard">
+
+  <nav>
+    <div>
+      <div class="nav-brand">Boom<em>/ V2</em></div>
+    </div>
+    <div class="nav-right">
+      <div class="topic-pill" id="nav-topic">—</div>
+      <div id="conn-badge" class="badge bad"><div class="dot"></div><span>Offline</span></div>
+      <div id="nav-clock">--:--:--</div>
+      <button class="btn-disc" id="btn-disconnect">Disconnect</button>
+    </div>
+  </nav>
+
+  <div class="content">
+
+    <!-- TOP STATS -->
+    <div class="stats-bar-top">
+      <div class="stat-item">
+        <div class="stat-label">Packets</div>
+        <div class="stat-value" id="sb-pkts">0</div>
+        <div class="stat-unit">total rx</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Frame Rate</div>
+        <div class="stat-value" id="sb-fps">0.0</div>
+        <div class="stat-unit">Hz</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Uptime</div>
+        <div class="stat-value" id="sb-uptime">0s</div>
+        <div class="stat-unit">connected</div>
+      </div>
+    </div>
+
+    <!-- SECTION 1: ALL 4 ATTITUDE INDICATORS -->
+    <div>
+      <div class="sec-hd">Real-Time Attitude Indicators</div>
+      <div class="sensors-grid">
+        
+        <!-- LEFT SENSOR -->
+        <div class="sensor-card">
+          <div class="sensor-header">
+            <div class="sensor-name">Left</div>
+            <div class="sensor-badge ok" id="badge-left">
+              <div class="dot"></div><span id="badge-left-text">valid</span>
+            </div>
+          </div>
+          <div class="horizon-container">
+            <div class="hz-ring"><canvas id="cv-horizon-left" width="140" height="140"></canvas></div>
+          </div>
+          <div class="attitude-values">
+            <div class="att-val">
+              <div class="att-lbl">Pitch</div>
+              <div class="att-num" id="att-pitch-left">0.0°</div>
+            </div>
+            <div class="att-val">
+              <div class="att-lbl">Roll</div>
+              <div class="att-num roll" id="att-roll-left">0.0°</div>
+            </div>
+          </div>
+          <div class="threshold-indicators">
+            <div class="thr-indicator ok" id="tc-pitch-left">Pitch OK</div>
+            <div class="thr-indicator ok" id="tc-roll-left">Roll OK</div>
+          </div>
+        </div>
+
+        <!-- RIGHT SENSOR -->
+        <div class="sensor-card">
+          <div class="sensor-header">
+            <div class="sensor-name">Right</div>
+            <div class="sensor-badge ok" id="badge-right">
+              <div class="dot"></div><span id="badge-right-text">valid</span>
+            </div>
+          </div>
+          <div class="horizon-container">
+            <div class="hz-ring"><canvas id="cv-horizon-right" width="140" height="140"></canvas></div>
+          </div>
+          <div class="attitude-values">
+            <div class="att-val">
+              <div class="att-lbl">Pitch</div>
+              <div class="att-num" id="att-pitch-right">0.0°</div>
+            </div>
+            <div class="att-val">
+              <div class="att-lbl">Roll</div>
+              <div class="att-num roll" id="att-roll-right">0.0°</div>
+            </div>
+          </div>
+          <div class="threshold-indicators">
+            <div class="thr-indicator ok" id="tc-pitch-right">Pitch OK</div>
+            <div class="thr-indicator ok" id="tc-roll-right">Roll OK</div>
+          </div>
+        </div>
+
+        <!-- CENTER SENSOR -->
+        <div class="sensor-card">
+          <div class="sensor-header">
+            <div class="sensor-name">Center</div>
+            <div class="sensor-badge ok" id="badge-center">
+              <div class="dot"></div><span id="badge-center-text">valid</span>
+            </div>
+          </div>
+          <div class="horizon-container">
+            <div class="hz-ring"><canvas id="cv-horizon-center" width="140" height="140"></canvas></div>
+          </div>
+          <div class="attitude-values">
+            <div class="att-val">
+              <div class="att-lbl">Pitch</div>
+              <div class="att-num" id="att-pitch-center">0.0°</div>
+            </div>
+            <div class="att-val">
+              <div class="att-lbl">Roll</div>
+              <div class="att-num roll" id="att-roll-center">0.0°</div>
+            </div>
+          </div>
+          <div class="threshold-indicators">
+            <div class="thr-indicator ok" id="tc-pitch-center">Pitch OK</div>
+            <div class="thr-indicator ok" id="tc-roll-center">Roll OK</div>
+          </div>
+        </div>
+
+        <!-- CHASSIS SENSOR -->
+        <div class="sensor-card">
+          <div class="sensor-header">
+            <div class="sensor-name">Chassis</div>
+            <div class="sensor-badge ok" id="badge-chassis">
+              <div class="dot"></div><span id="badge-chassis-text">valid</span>
+            </div>
+          </div>
+          <div class="horizon-container">
+            <div class="hz-ring"><canvas id="cv-horizon-chassis" width="140" height="140"></canvas></div>
+          </div>
+          <div class="attitude-values">
+            <div class="att-val">
+              <div class="att-lbl">Pitch</div>
+              <div class="att-num" id="att-pitch-chassis">0.0°</div>
+            </div>
+            <div class="att-val">
+              <div class="att-lbl">Roll</div>
+              <div class="att-num roll" id="att-roll-chassis">0.0°</div>
+            </div>
+          </div>
+          <div class="threshold-indicators">
+            <div class="thr-indicator ok" id="tc-pitch-chassis">Pitch OK</div>
+            <div class="thr-indicator ok" id="tc-roll-chassis">Roll OK</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SECTION 2: PITCH & ROLL GRAPHS FOR ALL 4 SENSORS -->
+    <div class="charts-section">
+      <div class="sec-hd">Pitch & Roll History</div>
+      <div class="charts-grid">
+
+        <!-- LEFT PITCH -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Left Pitch</div>
+            <div class="chart-tag">deg</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="ch-pitch-left"></canvas>
+          </div>
+          <div class="chart-stats">
+            <div class="chart-stat">
+              <div class="chart-stat-label">Min</div>
+              <div class="chart-stat-value" id="p-left-min">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Max</div>
+              <div class="chart-stat-value" id="p-left-max">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Avg</div>
+              <div class="chart-stat-value" id="p-left-avg">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LEFT ROLL -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Left Roll</div>
+            <div class="chart-tag">deg</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="ch-roll-left"></canvas>
+          </div>
+          <div class="chart-stats">
+            <div class="chart-stat">
+              <div class="chart-stat-label">Min</div>
+              <div class="chart-stat-value roll" id="r-left-min">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Max</div>
+              <div class="chart-stat-value roll" id="r-left-max">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Avg</div>
+              <div class="chart-stat-value roll" id="r-left-avg">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT PITCH -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Right Pitch</div>
+            <div class="chart-tag">deg</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="ch-pitch-right"></canvas>
+          </div>
+          <div class="chart-stats">
+            <div class="chart-stat">
+              <div class="chart-stat-label">Min</div>
+              <div class="chart-stat-value" id="p-right-min">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Max</div>
+              <div class="chart-stat-value" id="p-right-max">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Avg</div>
+              <div class="chart-stat-value" id="p-right-avg">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT ROLL -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Right Roll</div>
+            <div class="chart-tag">deg</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="ch-roll-right"></canvas>
+          </div>
+          <div class="chart-stats">
+            <div class="chart-stat">
+              <div class="chart-stat-label">Min</div>
+              <div class="chart-stat-value roll" id="r-right-min">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Max</div>
+              <div class="chart-stat-value roll" id="r-right-max">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Avg</div>
+              <div class="chart-stat-value roll" id="r-right-avg">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CENTER PITCH -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Center Pitch</div>
+            <div class="chart-tag">deg</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="ch-pitch-center"></canvas>
+          </div>
+          <div class="chart-stats">
+            <div class="chart-stat">
+              <div class="chart-stat-label">Min</div>
+              <div class="chart-stat-value" id="p-center-min">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Max</div>
+              <div class="chart-stat-value" id="p-center-max">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Avg</div>
+              <div class="chart-stat-value" id="p-center-avg">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CENTER ROLL -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Center Roll</div>
+            <div class="chart-tag">deg</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="ch-roll-center"></canvas>
+          </div>
+          <div class="chart-stats">
+            <div class="chart-stat">
+              <div class="chart-stat-label">Min</div>
+              <div class="chart-stat-value roll" id="r-center-min">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Max</div>
+              <div class="chart-stat-value roll" id="r-center-max">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Avg</div>
+              <div class="chart-stat-value roll" id="r-center-avg">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CHASSIS PITCH -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Chassis Pitch</div>
+            <div class="chart-tag">deg</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="ch-pitch-chassis"></canvas>
+          </div>
+          <div class="chart-stats">
+            <div class="chart-stat">
+              <div class="chart-stat-label">Min</div>
+              <div class="chart-stat-value" id="p-chassis-min">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Max</div>
+              <div class="chart-stat-value" id="p-chassis-max">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Avg</div>
+              <div class="chart-stat-value" id="p-chassis-avg">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CHASSIS ROLL -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Chassis Roll</div>
+            <div class="chart-tag">deg</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="ch-roll-chassis"></canvas>
+          </div>
+          <div class="chart-stats">
+            <div class="chart-stat">
+              <div class="chart-stat-label">Min</div>
+              <div class="chart-stat-value roll" id="r-chassis-min">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Max</div>
+              <div class="chart-stat-value roll" id="r-chassis-max">—</div>
+            </div>
+            <div class="chart-stat">
+              <div class="chart-stat-label">Avg</div>
+              <div class="chart-stat-value roll" id="r-chassis-avg">—</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ─────────────────────────────────────────────────────────────────
+const THRESHOLDS = {
+  pitch_warn_deg:    10.0,
+  pitch_danger_deg:  15.0,
+  roll_warn_deg:     10.0,
+  roll_danger_deg:   15.0,
+};
+
+const SENSORS = ['left', 'right', 'center', 'chassis'];
+let sensorData = { left: {}, right: {}, center: {}, chassis: {} };
+let pHist = { left: [], right: [], center: [], chassis: [] };
+let rHist = { left: [], right: [], center: [], chassis: [] };
+
+// ─── CHART FACTORY ───────────────────────────────────────────────────────────
+const MAX_PTS = 150;
+const charts = {};
+
+function mkChart(id, color) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  return new Chart(el.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        data: [],
+        borderColor: color,
+        backgroundColor: color + '20',
+        borderWidth: 2.5,
+        pointRadius: 0,
+        tension: 0.4,
+        fill: true
+      }]
+    },
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false }
+      },
+      scales: {
+        x: { display: false },
+        y: {
+          ticks: { color: '#64748b', font: { family: "'Inter'", size: 10 }, maxTicksLimit: 3 },
+          grid: { color: 'rgba(226, 232, 240, 0.6)' },
+          border: { color: 'rgba(226, 232, 240, 0.4)' }
+        }
+      }
+    }
+  });
+}
+
+function initCharts() {
+  SENSORS.forEach(sensor => {
+    charts[`pitch-${sensor}`] = mkChart(`ch-pitch-${sensor}`, '#0ea5e9');
+    charts[`roll-${sensor}`] = mkChart(`ch-roll-${sensor}`, '#8b5cf6');
+  });
+}
+initCharts();
+
+function pushChart(name, val) {
+  const c = charts[name];
+  if (!c) return;
+  c.data.labels.push('');
+  c.data.datasets[0].data.push(val);
+  if (c.data.labels.length > MAX_PTS) {
+    c.data.labels.shift();
+    c.data.datasets[0].data.shift();
+  }
+  c.update('none');
+}
+
+// ─── ARTIFICIAL HORIZON ───────────────────────────────────────────────────────
+const horizonCtx = {};
+
+function initHorizons() {
+  SENSORS.forEach(sensor => {
+    const cv = document.getElementById(`cv-horizon-${sensor}`);
+    if (cv) horizonCtx[sensor] = cv.getContext('2d');
+  });
+}
+initHorizons();
+
+function drawHorizon(sensor, pitch, roll) {
+  const ctx = horizonCtx[sensor];
+  if (!ctx) return;
+
+  const W = 140, H = 140, cx = 70, cy = 70, R = 70;
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.clip();
+
+  const rad = roll * Math.PI / 180;
+  const py = (pitch / 90) * R;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-rad);
+
+  // Sky
+  const sg = ctx.createLinearGradient(0, -R, 0, 0);
+  sg.addColorStop(0, '#87ceeb');
+  sg.addColorStop(1, '#b0e0e6');
+  ctx.fillStyle = sg;
+  ctx.fillRect(-R, -R - py, R * 2, R);
+
+  // Ground
+  const gg = ctx.createLinearGradient(0, 0, 0, R);
+  gg.addColorStop(0, '#8b7355');
+  gg.addColorStop(1, '#654321');
+  ctx.fillStyle = gg;
+  ctx.fillRect(-R, -py, R * 2, R);
+
+  // Horizon line
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-R, -py);
+  ctx.lineTo(R, -py);
+  ctx.stroke();
+
+  // Pitch markers
+  for (let d = -30; d <= 30; d += 10) {
+    if (!d) continue;
+    const y = -py - (d / 90) * R;
+    const w = Math.abs(d) % 20 === 0 ? 25 : 15;
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-w, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  // Wing marker
+  ctx.strokeStyle = '#ffcc00';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - 30, cy);
+  ctx.lineTo(cx - 8, cy);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + 8, cy);
+  ctx.lineTo(cx + 30, cy);
+  ctx.stroke();
+
+  // Center dot
+  ctx.fillStyle = '#ffcc00';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function $t(id, v) {
+  const e = document.getElementById(id);
+  if (e) e.textContent = v;
+}
+
+function arrStats(a) {
+  if (!a.length) return { min: 0, max: 0, avg: 0 };
+  return {
+    min: Math.min(...a),
+    max: Math.max(...a),
+    avg: a.reduce((x, y) => x + y, 0) / a.length
+  };
+}
+
+function updateThreshChip(id, val, warnLvl, dangerLvl) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const absVal = Math.abs(val);
+  if (absVal >= dangerLvl) {
+    el.className = 'thr-indicator danger';
+  } else if (absVal >= warnLvl) {
+    el.className = 'thr-indicator warn';
+  } else {
+    el.className = 'thr-indicator ok';
+  }
+}
+
+// ─── STATE & PROCESSING ─────────────────────────────────────────────────────
+let pktCount = 0, startMs = null, lastMs = 0, fpsWin = [];
+
+function onIMUPayload(payload) {
+  pktCount++;
+  if (!startMs) startMs = Date.now();
+
+  const now = Date.now();
+  if (lastMs) {
+    fpsWin.push(1000 / (now - lastMs));
+    if (fpsWin.length > 12) fpsWin.shift();
+  }
+  lastMs = now;
+  const fps = fpsWin.length ? (fpsWin.reduce((a, b) => a + b, 0) / fpsWin.length) : 0;
+
+  SENSORS.forEach(sensor => {
+    const f = payload[sensor];
+    if (!f) return;
+
+    sensorData[sensor] = f;
+    const pitch = +(f.pitch_deg ?? 0);
+    const roll = +(f.roll_deg ?? 0);
+
+    // Horizon
+    drawHorizon(sensor, pitch, roll);
+
+    // Attitude display
+    $t(`att-pitch-${sensor}`, pitch.toFixed(1) + '°');
+    $t(`att-roll-${sensor}`, roll.toFixed(1) + '°');
+
+    // Thresholds
+    updateThreshChip(`tc-pitch-${sensor}`, pitch, THRESHOLDS.pitch_warn_deg, THRESHOLDS.pitch_danger_deg);
+    updateThreshChip(`tc-roll-${sensor}`, roll, THRESHOLDS.roll_warn_deg, THRESHOLDS.roll_danger_deg);
+
+    // Badge
+    const badge = document.getElementById(`badge-${sensor}`);
+    if (badge) {
+      if (!f.valid) {
+        badge.className = 'sensor-badge err';
+        document.getElementById(`badge-${sensor}-text`).textContent = 'invalid';
+      } else if (Math.abs(pitch) >= THRESHOLDS.pitch_danger_deg || Math.abs(roll) >= THRESHOLDS.roll_danger_deg) {
+        badge.className = 'sensor-badge warn';
+        document.getElementById(`badge-${sensor}-text`).textContent = 'warning';
+      } else {
+        badge.className = 'sensor-badge ok';
+        document.getElementById(`badge-${sensor}-text`).textContent = 'valid';
+      }
+    }
+
+    // History
+    pHist[sensor].push(pitch);
+    if (pHist[sensor].length > 500) pHist[sensor].shift();
+    rHist[sensor].push(roll);
+    if (rHist[sensor].length > 500) rHist[sensor].shift();
+
+    // Charts
+    pushChart(`pitch-${sensor}`, pitch);
+    pushChart(`roll-${sensor}`, roll);
+
+    // Stats
+    const ps = arrStats(pHist[sensor]);
+    const rs = arrStats(rHist[sensor]);
+    $t(`p-${sensor}-min`, ps.min.toFixed(2));
+    $t(`p-${sensor}-max`, ps.max.toFixed(2));
+    $t(`p-${sensor}-avg`, ps.avg.toFixed(2));
+    $t(`r-${sensor}-min`, rs.min.toFixed(2));
+    $t(`r-${sensor}-max`, rs.max.toFixed(2));
+    $t(`r-${sensor}-avg`, rs.avg.toFixed(2));
+  });
+
+  $t('sb-pkts', pktCount);
+  $t('sb-fps', fps.toFixed(1));
+}
+
+// ─── CLOCK ────────────────────────────────────────────────────────────────────
+setInterval(() => {
+  $t('nav-clock', new Date().toTimeString().slice(0, 8));
+  if (startMs) $t('sb-uptime', Math.floor((Date.now() - startMs) / 1000) + 's');
+}, 1000);
+
+// ─── MQTT ─────────────────────────────────────────────────────────────────────
+let client = null;
+
+function badge(s) {
+  const b = document.getElementById('conn-badge');
+  const m = { ok: ['ok', 'Connected'], mid: ['mid', 'Connecting…'], bad: ['bad', 'Offline'] };
+  b.className = 'badge ' + m[s][0];
+  b.querySelector('span').textContent = m[s][1];
+}
+
+document.getElementById('cfg-proto').addEventListener('change', function () {
+  document.getElementById('cfg-port').value = this.value === 'wss' ? '8084' : '8083';
+});
+
+document.getElementById('btn-connect').addEventListener('click', () => {
+  const host = document.getElementById('cfg-host').value.trim() || 'broker.emqx.io';
+  const proto = document.getElementById('cfg-proto').value;
+  const port = +document.getElementById('cfg-port').value || 8084;
+  const base = document.getElementById('cfg-topic').value.trim().replace(/\/+$/, '') || 'boom/nandi01';
+  const user = document.getElementById('cfg-user').value.trim();
+  const pass = document.getElementById('cfg-pass').value;
+  const mqttv = +document.getElementById('cfg-mqttver').value;
+
+  badge('mid');
+
+  const opts = {
+    clientId: 'boom-dash-' + Math.random().toString(16).slice(2, 8),
+    clean: true,
+    connectTimeout: 8000,
+    protocolVersion: mqttv,
+  };
+  if (user) { opts.username = user; opts.password = pass; }
+
+  const url = `${proto}://${host}:${port}/mqtt`;
+  client = mqtt.connect(url, opts);
+
+  client.on('connect', () => {
+    badge('ok');
+    startMs = Date.now();
+    client.subscribe(base + '/imu');
+    $t('nav-topic', base + '/imu');
+    document.getElementById('connect-screen').style.display = 'none';
+    document.getElementById('dashboard').classList.add('show');
+  });
+
+  client.on('error', e => { badge('bad'); });
+  client.on('close', () => { badge('bad'); });
+  client.on('offline', () => badge('mid'));
+
+  client.on('message', (topic, msg) => {
+    try {
+      const payload = JSON.parse(msg.toString());
+      if (topic.includes('/imu')) {
+        onIMUPayload(payload);
+      }
+    } catch (e) { }
+  });
+});
+
+document.getElementById('btn-disconnect').addEventListener('click', () => {
+  if (client) { client.end(); client = null; }
+  badge('bad');
+  document.getElementById('connect-screen').style.display = 'flex';
+  document.getElementById('dashboard').classList.remove('show');
+  startMs = null;
+  pktCount = 0;
+  SENSORS.forEach(s => {
+    pHist[s] = [];
+    rHist[s] = [];
+    sensorData[s] = {};
+  });
+  fpsWin = [];
+});
+</script>
+</body>
+</html>
