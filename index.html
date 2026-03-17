@@ -3,232 +3,262 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Boom Dynamics V2 — Multi-Sensor Live View</title>
+<title>Boom Dynamics V3 — Multi-Sensor Comparison</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.3.4/mqtt.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.1.0/chartjs-plugin-zoom.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
 :root{
-  --bg:#f8fafc;
-  --bg-alt:#f1f5f9;
-  --card:#ffffff;
-  --border:#e2e8f0;
-  --border-dark:#cbd5e1;
-  --accent:#0ea5e9;
-  --accent-light:#e0f2fe;
-  --purple:#8b5cf6;
-  --purple-light:#ede9fe;
-  --green:#10b981;
-  --green-light:#d1fae5;
-  --yellow:#f59e0b;
-  --yellow-light:#fef3c7;
-  --red:#ef4444;
-  --red-light:#fee2e2;
-  --text:#1e293b;
-  --text-muted:#64748b;
-  --mono:'JetBrains Mono',monospace;
-  --sans:'Inter',sans-serif;
-  --r:8px;
+  --bg:#f4f6f9;
+  --bg-alt:#eaecf0;
+  --bg-card:#ffffff;
+  --bg-card2:#f8f9fb;
+  --border:#dde1e8;
+  --border-bright:#c4cad5;
+  --text:#1a2233;
+  --text-muted:#5a6478;
+  --text-dim:#8e99ad;
+  --accent:#d97706;
+  --accent-dim:rgba(217,119,6,0.10);
+  --accent-glow:rgba(217,119,6,0.22);
+  --left:#d97706;
+  --right:#059669;
+  --center:#2563eb;
+  --chassis:#7c3aed;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'Space Grotesk',sans-serif;
+  --r:10px;
+  --r-lg:14px;
 }
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{font-size:15px}
-body{
-  background:var(--bg);
-  color:var(--text);
-  font-family:var(--sans);
-  min-height:100vh;
-  overflow-x:hidden;
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+
+/* ── GRID TEXTURE BACKGROUND ── */
+body::before{
+  content:'';
+  position:fixed;
+  inset:0;
+  background-image:
+    linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+  background-size:40px 40px;
+  pointer-events:none;
+  z-index:0;
 }
 
-/* ── CONNECT ────────────────────────────────────────────────────────────────── */
+/* ── CONNECT SCREEN ── */
 #connect-screen{
   min-height:100vh;
   display:flex;
   align-items:center;
   justify-content:center;
-  background:linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
   padding:1rem;
+  position:relative;
+  z-index:1;
+}
+
+#connect-screen::after{
+  content:'';
+  position:fixed;
+  width:600px;height:600px;
+  background:radial-gradient(circle, rgba(217,119,6,0.07) 0%, transparent 70%);
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  pointer-events:none;
 }
 
 .cbox{
   width:100%;
-  max-width:500px;
-  background:var(--card);
+  max-width:540px;
+  background:var(--bg-card);
   border:1px solid var(--border);
-  border-radius:16px;
-  padding:2rem;
-  box-shadow:0 4px 20px rgba(0,0,0,0.08);
+  border-radius:20px;
+  padding:2.5rem;
+  box-shadow:0 0 0 1px rgba(217,119,6,0.06), 0 20px 60px rgba(0,0,0,0.10);
+  position:relative;
+  z-index:1;
+}
+
+.cbox::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  border-radius:20px;
+  background:linear-gradient(135deg, rgba(217,119,6,0.03) 0%, transparent 60%);
+  pointer-events:none;
 }
 
 .clogo{
-  font-size:1.8rem;
+  font-size:2rem;
   font-weight:700;
-  letter-spacing:-0.02em;
+  letter-spacing:-0.03em;
   color:var(--accent);
-  margin-bottom:.3rem;
+  margin-bottom:.2rem;
+  display:flex;
+  align-items:baseline;
+  gap:.4rem;
 }
 
 .clogo span{
   color:var(--text-muted);
-  font-weight:400;
+  font-weight:300;
+  font-size:1.4rem;
 }
 
 .csub{
-  font-size:.85rem;
-  color:var(--text-muted);
-  letter-spacing:.05em;
+  font-size:.75rem;
+  color:var(--text-dim);
+  letter-spacing:.12em;
   text-transform:uppercase;
-  margin-bottom:1.5rem;
+  margin-bottom:2rem;
   font-weight:500;
+  font-family:var(--mono);
 }
 
-.frow{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:1rem;
-  margin-bottom:1rem;
-}
-
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
 .fsingle{margin-bottom:1rem}
 
 .field label{
   display:block;
-  font-size:.8rem;
-  letter-spacing:.05em;
+  font-size:.72rem;
+  letter-spacing:.08em;
   text-transform:uppercase;
-  color:var(--text-muted);
+  color:var(--text-dim);
   margin-bottom:.5rem;
   font-weight:600;
+  font-family:var(--mono);
 }
 
-.field input,
-.field select{
+.field input,.field select{
   width:100%;
-  background:var(--bg-alt);
+  background:#f8f9fb;
   border:1px solid var(--border);
   border-radius:var(--r);
   color:var(--text);
   font-family:var(--mono);
   font-size:.85rem;
-  padding:.7rem 1rem;
+  padding:.75rem 1rem;
   outline:none;
   transition:all .2s;
 }
 
-.field input:focus,
-.field select:focus{
+.field input:focus,.field select:focus{
   border-color:var(--accent);
   background:#fff;
-  box-shadow:0 0 0 3px var(--accent-light);
+  box-shadow:0 0 0 3px var(--accent-dim);
 }
 
-.field select option{background:var(--card)}
+.field select option{background:#fff}
 
 .info-bar{
-  background:var(--accent-light);
-  border:1px solid var(--accent);
+  background:rgba(245,158,11,0.07);
+  border:1px solid rgba(245,158,11,0.2);
   border-radius:var(--r);
-  padding:1rem;
-  margin-bottom:1rem;
+  padding:1rem 1.2rem;
+  margin-bottom:1.5rem;
   font-family:var(--mono);
-  font-size:.8rem;
+  font-size:.78rem;
   color:var(--accent);
-  line-height:1.6;
+  line-height:1.8;
 }
 
-.info-bar strong{
-  font-weight:600;
-  color:var(--text);
-}
+.info-bar strong{font-weight:600;color:var(--text)}
 
 .btn-primary{
   width:100%;
-  background:linear-gradient(135deg, var(--accent), #0284c7);
-  color:#fff;
+  background:linear-gradient(135deg, #f59e0b, #d97706);
+  color:#0d1117;
   font-family:var(--sans);
-  font-size:.95rem;
-  font-weight:600;
-  letter-spacing:.05em;
+  font-size:.9rem;
+  font-weight:700;
+  letter-spacing:.08em;
   text-transform:uppercase;
   border:none;
   border-radius:var(--r);
-  padding:1rem;
+  padding:1.1rem;
   cursor:pointer;
-  transition:all .2s;
+  transition:all .25s;
   margin-top:.5rem;
+  position:relative;
+  overflow:hidden;
+}
+
+.btn-primary::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+  opacity:0;
+  transition:opacity .2s;
 }
 
 .btn-primary:hover{
   transform:translateY(-2px);
-  box-shadow:0 8px 16px rgba(14, 165, 233, 0.3);
+  box-shadow:0 12px 28px var(--accent-glow);
 }
 
-.cnote{
-  margin-top:1rem;
-  font-size:.8rem;
-  color:var(--text-muted);
-  line-height:1.7;
-}
+.btn-primary:hover::after{opacity:1}
 
-.cnote code{
-  background:var(--bg-alt);
-  border:1px solid var(--border);
-  border-radius:4px;
-  padding:.2rem .4rem;
-  font-family:var(--mono);
-}
+.cnote{margin-top:1.2rem;font-size:.78rem;color:var(--text-dim);line-height:1.7;font-family:var(--mono)}
+.cnote code{background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:4px;padding:.2rem .4rem}
 
-/* ── DASHBOARD ──────────────────────────────────────────────────────────────── */
-#dashboard{display:none;flex-direction:column;min-height:100vh}
+/* ── DASHBOARD ── */
+#dashboard{display:none;flex-direction:column;min-height:100vh;position:relative;z-index:1}
 #dashboard.show{display:flex}
 
-/* NAV */
 nav{
-  height:60px;
+  height:58px;
   display:flex;
   align-items:center;
   justify-content:space-between;
   padding:0 1.5rem;
-  background:var(--card);
+  background:rgba(255,255,255,0.92);
   border-bottom:1px solid var(--border);
-  box-shadow:0 1px 3px rgba(0,0,0,0.05);
+  backdrop-filter:blur(12px);
   position:sticky;
   top:0;
   z-index:200;
   flex-shrink:0;
+  box-shadow:0 1px 4px rgba(0,0,0,0.06);
 }
 
 .nav-brand{
-  font-size:1.2rem;
+  font-size:1.1rem;
   font-weight:700;
   letter-spacing:-0.02em;
   color:var(--accent);
+  display:flex;
+  align-items:center;
+  gap:.5rem;
 }
 
 .nav-brand em{
-  color:var(--text-muted);
+  color:var(--text-dim);
   font-style:normal;
   font-weight:400;
-  font-size:.85rem;
-  margin-left:.5rem;
+  font-size:.78rem;
+  letter-spacing:.05em;
+  font-family:var(--mono);
+  padding:.2rem .6rem;
+  background:rgba(255,255,255,0.04);
+  border:1px solid var(--border);
+  border-radius:20px;
 }
 
-.nav-right{
-  display:flex;
-  align-items:center;
-  gap:1.5rem;
-}
+.nav-right{display:flex;align-items:center;gap:1.2rem}
 
 .badge{
   display:flex;
   align-items:center;
   gap:.4rem;
   font-family:var(--mono);
-  font-size:.75rem;
-  letter-spacing:.05em;
+  font-size:.7rem;
+  letter-spacing:.08em;
   text-transform:uppercase;
-  padding:.4rem .8rem;
+  padding:.35rem .75rem;
   border-radius:20px;
   border:1.5px solid currentColor;
   transition:all .3s;
@@ -236,59 +266,42 @@ nav{
 }
 
 .badge .dot{
-  width:6px;
-  height:6px;
-  border-radius:50%;
+  width:5px;height:5px;border-radius:50%;
   background:currentColor;
-  animation:pulse 1.4s ease-in-out infinite;
+  animation:pulse 1.6s ease-in-out infinite;
 }
 
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
 
-.badge.ok{color:var(--green)}
-.badge.mid{color:var(--yellow)}
-.badge.bad{color:var(--red)}
-
-.topic-pill{
-  font-family:var(--mono);
-  font-size:.75rem;
-  background:var(--purple-light);
-  border:1px solid var(--purple);
-  color:var(--purple);
-  border-radius:4px;
-  padding:.25rem .7rem;
-  font-weight:600;
-}
+.badge.ok{color:#34d399}
+.badge.mid{color:#f59e0b}
+.badge.bad{color:#f87171}
 
 #nav-clock{
   font-family:var(--mono);
-  font-size:.8rem;
-  color:var(--text-muted);
+  font-size:.78rem;
+  color:var(--text-dim);
   font-weight:500;
+  letter-spacing:.05em;
 }
 
 .btn-disc{
-  font-family:var(--sans);
-  font-size:.75rem;
+  font-family:var(--mono);
+  font-size:.72rem;
   font-weight:600;
-  letter-spacing:.05em;
+  letter-spacing:.06em;
   text-transform:uppercase;
   background:transparent;
   border:1.5px solid var(--border);
   color:var(--text-muted);
   border-radius:var(--r);
-  padding:.4rem 1rem;
+  padding:.4rem .9rem;
   cursor:pointer;
   transition:all .2s;
 }
 
-.btn-disc:hover{
-  border-color:var(--red);
-  color:var(--red);
-  background:var(--red-light);
-}
+.btn-disc:hover{border-color:#f87171;color:#f87171;background:rgba(248,113,113,0.08)}
 
-/* CONTENT */
 .content{
   flex:1;
   padding:1.5rem;
@@ -296,332 +309,516 @@ nav{
   flex-direction:column;
   gap:1.5rem;
   overflow-y:auto;
-  background:var(--bg-alt);
+  background:transparent;
 }
 
-.sec-hd{
-  font-size:.85rem;
-  letter-spacing:.1em;
-  text-transform:uppercase;
-  color:var(--text-muted);
-  font-weight:700;
-  padding-bottom:.5rem;
-  margin-bottom:1rem;
-}
-
-/* GRID */
-.sensors-grid{
-  display:grid;
-  grid-template-columns:repeat(4, 1fr);
-  gap:1.2rem;
-}
-
-.sensor-card{
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:var(--r);
-  padding:1.2rem;
-  display:flex;
-  flex-direction:column;
-  gap:1rem;
-  box-shadow:0 1px 3px rgba(0,0,0,0.05);
-  transition:all .3s;
-}
-
-.sensor-card:hover{
-  box-shadow:0 4px 12px rgba(0,0,0,0.08);
-  border-color:var(--accent);
-}
-
-.sensor-header{
+/* ── CONTROL BAR ── */
+.control-bar{
   display:flex;
   align-items:center;
   justify-content:space-between;
-}
-
-.sensor-name{
-  font-size:1rem;
-  font-weight:700;
-  color:var(--text);
-  text-transform:capitalize;
-  letter-spacing:.02em;
-}
-
-.sensor-badge{
-  display:flex;
-  align-items:center;
-  gap:.3rem;
-  font-size:.7rem;
-  font-weight:600;
-  padding:.25rem .6rem;
-  border-radius:12px;
-  text-transform:uppercase;
-  letter-spacing:.05em;
-}
-
-.sensor-badge.ok{
-  background:var(--green-light);
-  color:var(--green);
-  border:1px solid var(--green);
-}
-
-.sensor-badge.warn{
-  background:var(--yellow-light);
-  color:var(--yellow);
-  border:1px solid var(--yellow);
-}
-
-.sensor-badge.err{
-  background:var(--red-light);
-  color:var(--red);
-  border:1px solid var(--red);
-}
-
-.sensor-badge .dot{
-  width:4px;
-  height:4px;
-  border-radius:50%;
-  background:currentColor;
-}
-
-/* ATTITUDE INDICATOR */
-.horizon-container{
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  margin:0.5rem 0;
-}
-
-.hz-ring{
-  position:relative;
-  width:140px;
-  height:140px;
-  border-radius:50%;
-  overflow:hidden;
-  border:2px solid var(--border-dark);
-  box-shadow:0 2px 8px rgba(0,0,0,0.1), inset 0 0 12px rgba(14, 165, 233, 0.08);
-  background:#fff;
-}
-
-.hz-ring canvas{display:block}
-
-/* PITCH/ROLL VALUES */
-.attitude-values{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:.6rem;
-  padding:.6rem 0;
-  border-top:1px solid var(--border);
-  border-bottom:1px solid var(--border);
-}
-
-.att-val{
-  display:flex;
-  flex-direction:column;
-  gap:.2rem;
-}
-
-.att-lbl{
-  font-size:.7rem;
-  font-weight:600;
-  color:var(--text-muted);
-  text-transform:uppercase;
-  letter-spacing:.05em;
-}
-
-.att-num{
-  font-family:var(--mono);
-  font-size:1.4rem;
-  font-weight:700;
-  color:var(--accent);
-}
-
-.att-num.roll{color:var(--purple)}
-
-/* THRESHOLD */
-.threshold-indicators{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:.4rem;
-}
-
-.thr-indicator{
-  font-size:.7rem;
-  font-weight:600;
-  padding:.4rem .6rem;
-  border-radius:4px;
-  text-align:center;
-  text-transform:uppercase;
-  letter-spacing:.05em;
+  background:var(--bg-card);
   border:1px solid var(--border);
-  background:var(--bg-alt);
-  color:var(--text-muted);
-  transition:all .2s;
+  border-radius:var(--r-lg);
+  padding:1rem 1.4rem;
+  box-shadow:0 2px 8px rgba(0,0,0,0.06);
+  gap:1.5rem;
+  flex-wrap:wrap;
 }
 
-.thr-indicator.ok{
-  background:var(--green-light);
-  color:var(--green);
-  border-color:var(--green);
-}
+.stats-group{display:flex;gap:2rem;align-items:center}
 
-.thr-indicator.warn{
-  background:var(--yellow-light);
-  color:var(--yellow);
-  border-color:var(--yellow);
-}
-
-.thr-indicator.danger{
-  background:var(--red-light);
-  color:var(--red);
-  border-color:var(--red);
-  animation:pulse-danger .8s ease-in-out infinite;
-}
-
-@keyframes pulse-danger{
-  0%,100%{opacity:1}
-  50%{opacity:.6}
-}
-
-/* CHARTS SECTION */
-.charts-section{
-  margin-top:1.5rem;
-}
-
-.charts-grid{
-  display:grid;
-  grid-template-columns:repeat(4, 1fr);
-  gap:1.2rem;
-}
-
-.chart-card{
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:var(--r);
-  padding:1rem;
-  box-shadow:0 1px 3px rgba(0,0,0,0.05);
-}
-
-.chart-header{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  margin-bottom:.8rem;
-  padding-bottom:.6rem;
-  border-bottom:1px solid var(--border);
-}
-
-.chart-title{
-  font-size:.85rem;
-  font-weight:700;
-  color:var(--text);
-  text-transform:uppercase;
-  letter-spacing:.05em;
-}
-
-.chart-tag{
-  font-size:.65rem;
-  background:var(--accent-light);
-  color:var(--accent);
-  border:1px solid var(--accent);
-  padding:.2rem .4rem;
-  border-radius:3px;
-  font-weight:600;
-}
-
-.chart-container{
-  position:relative;
-  height:120px;
-  margin-bottom:.6rem;
-}
-
-.chart-stats{
-  display:grid;
-  grid-template-columns:1fr 1fr 1fr;
-  gap:.5rem;
-  font-size:.75rem;
-}
-
-.chart-stat{
-  display:flex;
-  flex-direction:column;
-  gap:.2rem;
-}
-
-.chart-stat-label{
-  color:var(--text-muted);
-  font-weight:600;
-  text-transform:uppercase;
-  letter-spacing:.05em;
-}
-
-.chart-stat-value{
-  font-family:var(--mono);
-  font-size:.9rem;
-  font-weight:700;
-  color:var(--accent);
-}
-
-.chart-stat-value.roll{color:var(--purple)}
-
-/* STATS BAR */
-.stats-bar-top{
-  display:grid;
-  grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));
-  gap:1rem;
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:var(--r);
-  padding:1.2rem;
-  box-shadow:0 1px 3px rgba(0,0,0,0.05);
-  margin-bottom:1.5rem;
-}
-
-.stat-item{
-  display:flex;
-  flex-direction:column;
-  gap:.4rem;
-}
+.stat-item{display:flex;flex-direction:column;gap:.25rem}
 
 .stat-label{
-  font-size:.75rem;
-  font-weight:700;
-  color:var(--text-muted);
+  font-size:.68rem;
+  font-weight:600;
+  color:var(--text-dim);
   text-transform:uppercase;
-  letter-spacing:.05em;
+  letter-spacing:.1em;
+  font-family:var(--mono);
 }
 
 .stat-value{
   font-family:var(--mono);
   font-size:1.3rem;
+  font-weight:600;
+  color:var(--accent);
+  letter-spacing:-0.02em;
+}
+
+.data-control{display:flex;align-items:center;gap:.8rem}
+
+.data-label{
+  font-size:.72rem;
+  font-weight:600;
+  color:var(--text-dim);
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  font-family:var(--mono);
+}
+
+.data-select{
+  background:#f8f9fb;
+  border:1.5px solid var(--border);
+  border-radius:var(--r);
+  color:var(--text);
+  font-family:var(--sans);
+  font-size:.85rem;
+  font-weight:600;
+  padding:.55rem .9rem;
+  outline:none;
+  cursor:pointer;
+  transition:all .2s;
+}
+
+.data-select:focus{
+  border-color:var(--accent);
+  background:#fff;
+  box-shadow:0 0 0 3px var(--accent-dim);
+}
+
+.data-select option{background:#fff}
+
+/* ── COMPARISON PANEL ── */
+.comparison-panel{
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-radius:var(--r-lg);
+  padding:1.4rem;
+  box-shadow:0 2px 8px rgba(0,0,0,0.06);
+}
+
+.comp-title{
+  font-size:.8rem;
   font-weight:700;
+  color:var(--text-muted);
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  margin-bottom:1.2rem;
+  display:flex;
+  align-items:center;
+  gap:.6rem;
+  font-family:var(--mono);
+  padding-bottom:.8rem;
+  border-bottom:1px solid var(--border);
+}
+
+.comp-title::before{
+  content:'';
+  width:3px;height:14px;
+  background:var(--accent);
+  border-radius:2px;
+  flex-shrink:0;
+}
+
+.comp-row{
+  display:grid;
+  grid-template-columns:repeat(4, 1fr);
+  gap:1rem;
+  margin-bottom:1.2rem;
+}
+
+.comp-item{display:flex;flex-direction:column;gap:.4rem}
+
+.comp-label{
+  font-size:.68rem;
+  font-weight:700;
+  color:var(--text-dim);
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  font-family:var(--mono);
+}
+
+.comp-select{
+  background:#f8f9fb;
+  border:1.5px solid var(--border);
+  border-radius:var(--r);
+  color:var(--text);
+  font-family:var(--sans);
+  font-size:.82rem;
+  font-weight:600;
+  padding:.55rem .7rem;
+  outline:none;
+  cursor:pointer;
+  transition:all .2s;
+}
+
+.comp-select:focus{
+  border-color:var(--accent);
+  background:#fff;
+  box-shadow:0 0 0 3px var(--accent-dim);
+}
+
+.comp-select option{background:#fff}
+
+/* ── DEVIATION TABLE ── */
+.table-wrapper{overflow-x:auto;margin-top:.8rem}
+
+.deviation-table{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  font-size:.82rem;
+  font-family:var(--mono);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  overflow:hidden;
+}
+
+.deviation-table thead th{
+  background:#f4f6f9;
+  color:var(--text-muted);
+  font-weight:700;
+  padding:.8rem 1rem;
+  text-align:center;
+  border-bottom:1px solid var(--border);
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  font-size:.72rem;
+  white-space:nowrap;
+}
+
+.deviation-table thead th:first-child{text-align:left;padding-left:1.2rem}
+
+.deviation-table tbody td{
+  padding:.8rem 1rem;
+  border-bottom:1px solid rgba(0,0,0,0.05);
+  text-align:center;
+  font-weight:500;
+  color:var(--text-muted);
+  transition:background .15s;
+}
+
+.deviation-table tbody td:first-child{text-align:left;padding-left:1.2rem}
+.deviation-table tbody tr:last-child td{border-bottom:none}
+.deviation-table tbody tr:hover td{background:rgba(217,119,6,0.04)}
+
+.dev-sensor{
+  display:flex;
+  align-items:center;
+  gap:.5rem;
+  font-weight:700;
+  text-transform:capitalize;
+  color:var(--text);
+}
+
+.dev-sensor-dot{
+  width:8px;height:8px;border-radius:50%;flex-shrink:0;
+}
+
+.dev-value{
+  font-weight:700;
+  font-size:.85rem;
+  color:var(--text);
+}
+
+.dev-delta{
+  display:inline-flex;
+  align-items:center;
+  gap:.25rem;
+  font-weight:700;
+  font-size:.82rem;
+  padding:.25rem .5rem;
+  border-radius:5px;
+}
+
+.dev-positive{background:rgba(248,113,113,0.12);color:#f87171}
+.dev-negative{background:rgba(96,165,250,0.12);color:#60a5fa}
+.dev-neutral{background:rgba(125,144,168,0.08);color:var(--text-dim)}
+
+.comp-msg{
+  color:var(--text-dim);
+  font-size:.8rem;
+  font-family:var(--mono);
+  text-align:center;
+  padding:1.5rem;
+  background:#f8f9fb;
+  border-radius:var(--r);
+  border:1px dashed var(--border);
+}
+
+/* ── LEGEND ── */
+.legend{
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-radius:var(--r-lg);
+  padding:1rem 1.4rem;
+  box-shadow:0 2px 8px rgba(0,0,0,0.06);
+  display:grid;
+  grid-template-columns:repeat(4, 1fr);
+  gap:.8rem;
+}
+
+.legend-item{
+  display:flex;
+  align-items:center;
+  gap:.8rem;
+  padding:.6rem .8rem;
+  border-radius:8px;
+  background:#f8f9fb;
+  border:1px solid var(--border);
+  transition:border-color .2s, box-shadow .2s;
+}
+
+.legend-item:hover{border-color:var(--border-bright);box-shadow:0 2px 8px rgba(0,0,0,0.07)}
+
+.legend-color{
+  width:28px;height:28px;border-radius:6px;
+  flex-shrink:0;
+  position:relative;
+  overflow:hidden;
+}
+
+.legend-color::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(135deg, rgba(255,255,255,0.2), transparent);
+}
+
+.legend-text{display:flex;flex-direction:column;gap:.15rem}
+.legend-name{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text)}
+.legend-desc{font-size:.68rem;color:var(--text-dim);font-family:var(--mono)}
+
+/* ── GRAPH CARD ── */
+.graph-card{
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-radius:var(--r-lg);
+  padding:1.5rem;
+  box-shadow:0 2px 8px rgba(0,0,0,0.06);
+}
+
+.graph-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:1.2rem;
+  padding-bottom:1rem;
+  border-bottom:1px solid var(--border);
+  flex-wrap:wrap;
+  gap:1rem;
+}
+
+.graph-title-group{display:flex;align-items:center;gap:.8rem}
+
+.graph-title{
+  font-size:.95rem;
+  font-weight:700;
+  color:var(--text);
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  font-family:var(--mono);
+}
+
+.graph-unit{
+  font-size:.72rem;
+  background:var(--accent-dim);
+  color:var(--accent);
+  border:1px solid rgba(245,158,11,0.25);
+  padding:.3rem .65rem;
+  border-radius:5px;
+  font-weight:600;
+  font-family:var(--mono);
+  letter-spacing:.06em;
+}
+
+/* ── ZOOM CONTROLS ── */
+.graph-controls{
+  display:flex;
+  align-items:center;
+  gap:.5rem;
+  flex-wrap:wrap;
+}
+
+.zoom-group{
+  display:flex;
+  align-items:center;
+  background:#f4f6f9;
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  overflow:hidden;
+}
+
+.zoom-btn{
+  background:transparent;
+  border:none;
+  border-right:1px solid var(--border);
+  color:var(--text-muted);
+  font-family:var(--mono);
+  font-size:.78rem;
+  font-weight:600;
+  padding:.5rem .85rem;
+  cursor:pointer;
+  transition:all .18s;
+  white-space:nowrap;
+  letter-spacing:.03em;
+}
+
+.zoom-btn:last-child{border-right:none}
+
+.zoom-btn:hover{
+  background:rgba(217,119,6,0.08);
   color:var(--accent);
 }
 
-.stat-unit{
-  font-size:.7rem;
+.zoom-btn.active{
+  background:rgba(217,119,6,0.12);
+  color:var(--accent);
+}
+
+.zoom-btn-solo{
+  background:#f4f6f9;
+  border:1px solid var(--border);
   color:var(--text-muted);
-  font-weight:500;
+  font-family:var(--mono);
+  font-size:.78rem;
+  font-weight:600;
+  padding:.5rem .9rem;
+  border-radius:var(--r);
+  cursor:pointer;
+  transition:all .18s;
+  white-space:nowrap;
 }
 
-/* RESPONSIVE */
-@media(max-width:1600px){
-  .sensors-grid{grid-template-columns:repeat(2, 1fr)}
-  .charts-grid{grid-template-columns:repeat(2, 1fr)}
+.zoom-btn-solo:hover{
+  border-color:var(--border-bright);
+  color:var(--text);
+  background:#eaecf0;
 }
 
-@media(max-width:1024px){
-  .sensors-grid{grid-template-columns:repeat(2, 1fr)}
-  .charts-grid{grid-template-columns:repeat(2, 1fr)}
-  .content{padding:1rem}
+.zoom-mode-btn{
+  background:#f4f6f9;
+  border:1.5px solid var(--border);
+  color:var(--text-muted);
+  font-family:var(--mono);
+  font-size:.78rem;
+  font-weight:700;
+  padding:.5rem 1rem;
+  border-radius:var(--r);
+  cursor:pointer;
+  transition:all .2s;
+  white-space:nowrap;
+  letter-spacing:.03em;
+  display:flex;
+  align-items:center;
+  gap:.4rem;
+}
+.zoom-mode-btn:hover{
+  border-color:var(--border-bright);
+  color:var(--text);
+}
+.zoom-mode-btn.on{
+  background:rgba(217,119,6,0.10);
+  border-color:var(--accent);
+  color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-dim);
+}
+.graph-container.zoom-active{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-dim);
+}
+
+.graph-container{
+  position:relative;
+  height:400px;
+  background:#f8f9fb;
+  border-radius:10px;
+  border:1px solid var(--border);
+  padding:.5rem;
+  cursor:crosshair;
+  overflow:hidden;
+}
+
+.graph-container.zoomed{height:600px}
+.graph-container canvas{display:block}
+
+/* Subtle scan-line effect on graph */
+.graph-container::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(0,0,0,0.012) 3px,
+    rgba(0,0,0,0.012) 6px
+  );
+  pointer-events:none;
+  border-radius:10px;
+  z-index:5;
+}
+
+/* ── HOVER TOOLTIP ── */
+.hover-legend{
+  position:absolute;
+  background:rgba(255,255,255,0.97);
+  border:1px solid var(--border-bright);
+  border-top:2px solid var(--accent);
+  border-radius:10px;
+  padding:1rem 1.2rem;
+  pointer-events:none;
+  z-index:100;
+  max-width:280px;
+  font-size:.75rem;
+  font-family:var(--mono);
+  color:var(--text);
+  box-shadow:0 8px 24px rgba(0,0,0,0.12);
+  backdrop-filter:blur(8px);
+}
+
+.hover-legend.hidden{display:none}
+
+.hover-ts{
+  font-size:.68rem;
+  color:var(--text-dim);
+  margin-bottom:.6rem;
+  padding-bottom:.5rem;
+  border-bottom:1px solid var(--border);
+  letter-spacing:.05em;
+}
+
+.hover-value{
+  display:flex;
+  align-items:center;
+  gap:.6rem;
+  padding:.25rem 0;
+}
+
+.hover-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.hover-label{flex:1;color:var(--text-muted)}
+.hover-val{font-weight:700;color:var(--text);min-width:60px;text-align:right}
+
+.help-text{
+  font-size:.7rem;
+  color:var(--text-dim);
+  margin-top:.8rem;
+  font-family:var(--mono);
+  letter-spacing:.03em;
+}
+
+/* ── RESPONSIVE ── */
+@media(max-width:1200px){
+  .graph-container{height:300px}
+  .graph-container.zoomed{height:500px}
+  .legend{grid-template-columns:repeat(2,1fr)}
+  .comp-row{grid-template-columns:repeat(2,1fr)}
 }
 
 @media(max-width:768px){
-  .sensors-grid{grid-template-columns:1fr}
-  .charts-grid{grid-template-columns:1fr}
   nav{padding:0 1rem}
-  .nav-right{gap:0.8rem}
-  .content{padding:0.8rem}
+  .nav-right{gap:.6rem}
+  .content{padding:.8rem}
+  .control-bar{flex-direction:column;align-items:flex-start}
+  .stats-group{gap:1.2rem}
+  .graph-container{height:260px}
+  .graph-container.zoomed{height:420px}
+  .legend{grid-template-columns:1fr}
+  .comp-row{grid-template-columns:1fr}
+  .deviation-table{font-size:.75rem}
+  .deviation-table thead th,.deviation-table tbody td{padding:.6rem .6rem}
 }
 </style>
 </head>
@@ -631,11 +828,11 @@ nav{
 <div id="connect-screen">
   <div class="cbox">
     <div class="clogo">Boom<span>Dynamics</span></div>
-    <div class="csub">Multi-Sensor IMU Live Analytics v2</div>
+    <div class="csub">Multi-Sensor Comparison // v3</div>
 
     <div class="info-bar">
-      <strong>Configuration →</strong><br>
-      Broker: <strong>broker.emqx.io:8084</strong> | Topic: <strong>boom/nandi01/imu</strong>
+      <strong>Default Configuration</strong><br>
+      Broker: <strong>broker.emqx.io:8084</strong> &nbsp;|&nbsp; Topic: <strong>boom/nandi01/imu</strong>
     </div>
 
     <div class="frow">
@@ -662,10 +859,10 @@ nav{
       <div class="field"><label>Password</label><input id="cfg-pass" type="password" value="astra"/></div>
     </div>
 
-    <button class="btn-primary" id="btn-connect">→ Connect & Start</button>
+    <button class="btn-primary" id="btn-connect">→ Connect &amp; Start</button>
 
     <div class="cnote">
-      Payload: <code>{"left":{...}, "right":{...}, "center":{...}, "chassis":{...}}</code>
+      Reference + Target comparison with graph zoom. Scroll to zoom, drag to pan.
     </div>
   </div>
 </div>
@@ -674,11 +871,8 @@ nav{
 <div id="dashboard">
 
   <nav>
-    <div>
-      <div class="nav-brand">Boom<em>/ V2</em></div>
-    </div>
+    <div class="nav-brand">BoomDynamics<em>V3 · Comparison</em></div>
     <div class="nav-right">
-      <div class="topic-pill" id="nav-topic">—</div>
       <div id="conn-badge" class="badge bad"><div class="dot"></div><span>Offline</span></div>
       <div id="nav-clock">--:--:--</div>
       <button class="btn-disc" id="btn-disconnect">Disconnect</button>
@@ -687,654 +881,456 @@ nav{
 
   <div class="content">
 
-    <!-- TOP STATS -->
-    <div class="stats-bar-top">
-      <div class="stat-item">
-        <div class="stat-label">Packets</div>
-        <div class="stat-value" id="sb-pkts">0</div>
-        <div class="stat-unit">total rx</div>
+    <!-- CONTROL BAR -->
+    <div class="control-bar">
+      <div class="stats-group">
+        <div class="stat-item">
+          <div class="stat-label">Packets</div>
+          <div class="stat-value" id="sb-pkts">0</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Frame Rate</div>
+          <div class="stat-value" id="sb-fps">0.0 Hz</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Uptime</div>
+          <div class="stat-value" id="sb-uptime">0s</div>
+        </div>
       </div>
-      <div class="stat-item">
-        <div class="stat-label">Frame Rate</div>
-        <div class="stat-value" id="sb-fps">0.0</div>
-        <div class="stat-unit">Hz</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-label">Uptime</div>
-        <div class="stat-value" id="sb-uptime">0s</div>
-        <div class="stat-unit">connected</div>
-      </div>
-    </div>
-
-    <!-- SECTION 1: ALL 4 ATTITUDE INDICATORS -->
-    <div>
-      <div class="sec-hd">Real-Time Attitude Indicators</div>
-      <div class="sensors-grid">
-        
-        <!-- LEFT SENSOR -->
-        <div class="sensor-card">
-          <div class="sensor-header">
-            <div class="sensor-name">Left</div>
-            <div class="sensor-badge ok" id="badge-left">
-              <div class="dot"></div><span id="badge-left-text">valid</span>
-            </div>
-          </div>
-          <div class="horizon-container">
-            <div class="hz-ring"><canvas id="cv-horizon-left" width="140" height="140"></canvas></div>
-          </div>
-          <div class="attitude-values">
-            <div class="att-val">
-              <div class="att-lbl">Pitch</div>
-              <div class="att-num" id="att-pitch-left">0.0°</div>
-            </div>
-            <div class="att-val">
-              <div class="att-lbl">Roll</div>
-              <div class="att-num roll" id="att-roll-left">0.0°</div>
-            </div>
-          </div>
-          <div class="threshold-indicators">
-            <div class="thr-indicator ok" id="tc-pitch-left">Pitch OK</div>
-            <div class="thr-indicator ok" id="tc-roll-left">Roll OK</div>
-          </div>
-        </div>
-
-        <!-- RIGHT SENSOR -->
-        <div class="sensor-card">
-          <div class="sensor-header">
-            <div class="sensor-name">Right</div>
-            <div class="sensor-badge ok" id="badge-right">
-              <div class="dot"></div><span id="badge-right-text">valid</span>
-            </div>
-          </div>
-          <div class="horizon-container">
-            <div class="hz-ring"><canvas id="cv-horizon-right" width="140" height="140"></canvas></div>
-          </div>
-          <div class="attitude-values">
-            <div class="att-val">
-              <div class="att-lbl">Pitch</div>
-              <div class="att-num" id="att-pitch-right">0.0°</div>
-            </div>
-            <div class="att-val">
-              <div class="att-lbl">Roll</div>
-              <div class="att-num roll" id="att-roll-right">0.0°</div>
-            </div>
-          </div>
-          <div class="threshold-indicators">
-            <div class="thr-indicator ok" id="tc-pitch-right">Pitch OK</div>
-            <div class="thr-indicator ok" id="tc-roll-right">Roll OK</div>
-          </div>
-        </div>
-
-        <!-- CENTER SENSOR -->
-        <div class="sensor-card">
-          <div class="sensor-header">
-            <div class="sensor-name">Center</div>
-            <div class="sensor-badge ok" id="badge-center">
-              <div class="dot"></div><span id="badge-center-text">valid</span>
-            </div>
-          </div>
-          <div class="horizon-container">
-            <div class="hz-ring"><canvas id="cv-horizon-center" width="140" height="140"></canvas></div>
-          </div>
-          <div class="attitude-values">
-            <div class="att-val">
-              <div class="att-lbl">Pitch</div>
-              <div class="att-num" id="att-pitch-center">0.0°</div>
-            </div>
-            <div class="att-val">
-              <div class="att-lbl">Roll</div>
-              <div class="att-num roll" id="att-roll-center">0.0°</div>
-            </div>
-          </div>
-          <div class="threshold-indicators">
-            <div class="thr-indicator ok" id="tc-pitch-center">Pitch OK</div>
-            <div class="thr-indicator ok" id="tc-roll-center">Roll OK</div>
-          </div>
-        </div>
-
-        <!-- CHASSIS SENSOR -->
-        <div class="sensor-card">
-          <div class="sensor-header">
-            <div class="sensor-name">Chassis</div>
-            <div class="sensor-badge ok" id="badge-chassis">
-              <div class="dot"></div><span id="badge-chassis-text">valid</span>
-            </div>
-          </div>
-          <div class="horizon-container">
-            <div class="hz-ring"><canvas id="cv-horizon-chassis" width="140" height="140"></canvas></div>
-          </div>
-          <div class="attitude-values">
-            <div class="att-val">
-              <div class="att-lbl">Pitch</div>
-              <div class="att-num" id="att-pitch-chassis">0.0°</div>
-            </div>
-            <div class="att-val">
-              <div class="att-lbl">Roll</div>
-              <div class="att-num roll" id="att-roll-chassis">0.0°</div>
-            </div>
-          </div>
-          <div class="threshold-indicators">
-            <div class="thr-indicator ok" id="tc-pitch-chassis">Pitch OK</div>
-            <div class="thr-indicator ok" id="tc-roll-chassis">Roll OK</div>
-          </div>
-        </div>
-
+      <div class="data-control">
+        <label class="data-label">Data:</label>
+        <select class="data-select" id="data-select">
+          <option value="pitch-roll">Pitch &amp; Roll</option>
+          <option value="accel">Accel X &amp; Y</option>
+          <option value="gyro">Gyro X &amp; Y</option>
+        </select>
       </div>
     </div>
 
-    <!-- SECTION 2: PITCH & ROLL GRAPHS FOR ALL 4 SENSORS -->
-    <div class="charts-section">
-      <div class="sec-hd">Pitch & Roll History</div>
-      <div class="charts-grid">
-
-        <!-- LEFT PITCH -->
-        <div class="chart-card">
-          <div class="chart-header">
-            <div class="chart-title">Left Pitch</div>
-            <div class="chart-tag">deg</div>
-          </div>
-          <div class="chart-container">
-            <canvas id="ch-pitch-left"></canvas>
-          </div>
-          <div class="chart-stats">
-            <div class="chart-stat">
-              <div class="chart-stat-label">Min</div>
-              <div class="chart-stat-value" id="p-left-min">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Max</div>
-              <div class="chart-stat-value" id="p-left-max">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Avg</div>
-              <div class="chart-stat-value" id="p-left-avg">—</div>
-            </div>
-          </div>
+    <!-- COMPARISON PANEL -->
+    <div class="comparison-panel">
+      <div class="comp-title">Reference &amp; Target Comparison</div>
+      <div class="comp-row">
+        <div class="comp-item">
+          <label class="comp-label">Reference IMU</label>
+          <select class="comp-select" id="ref-sensor">
+            <option value="">Select Reference…</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+            <option value="center">Center</option>
+            <option value="chassis">Chassis</option>
+          </select>
         </div>
-
-        <!-- LEFT ROLL -->
-        <div class="chart-card">
-          <div class="chart-header">
-            <div class="chart-title">Left Roll</div>
-            <div class="chart-tag">deg</div>
-          </div>
-          <div class="chart-container">
-            <canvas id="ch-roll-left"></canvas>
-          </div>
-          <div class="chart-stats">
-            <div class="chart-stat">
-              <div class="chart-stat-label">Min</div>
-              <div class="chart-stat-value roll" id="r-left-min">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Max</div>
-              <div class="chart-stat-value roll" id="r-left-max">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Avg</div>
-              <div class="chart-stat-value roll" id="r-left-avg">—</div>
-            </div>
-          </div>
+        <div class="comp-item">
+          <label class="comp-label">Target 1</label>
+          <select class="comp-select" id="target-1">
+            <option value="">None</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+            <option value="center">Center</option>
+            <option value="chassis">Chassis</option>
+          </select>
         </div>
-
-        <!-- RIGHT PITCH -->
-        <div class="chart-card">
-          <div class="chart-header">
-            <div class="chart-title">Right Pitch</div>
-            <div class="chart-tag">deg</div>
-          </div>
-          <div class="chart-container">
-            <canvas id="ch-pitch-right"></canvas>
-          </div>
-          <div class="chart-stats">
-            <div class="chart-stat">
-              <div class="chart-stat-label">Min</div>
-              <div class="chart-stat-value" id="p-right-min">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Max</div>
-              <div class="chart-stat-value" id="p-right-max">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Avg</div>
-              <div class="chart-stat-value" id="p-right-avg">—</div>
-            </div>
-          </div>
+        <div class="comp-item">
+          <label class="comp-label">Target 2</label>
+          <select class="comp-select" id="target-2">
+            <option value="">None</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+            <option value="center">Center</option>
+            <option value="chassis">Chassis</option>
+          </select>
         </div>
-
-        <!-- RIGHT ROLL -->
-        <div class="chart-card">
-          <div class="chart-header">
-            <div class="chart-title">Right Roll</div>
-            <div class="chart-tag">deg</div>
-          </div>
-          <div class="chart-container">
-            <canvas id="ch-roll-right"></canvas>
-          </div>
-          <div class="chart-stats">
-            <div class="chart-stat">
-              <div class="chart-stat-label">Min</div>
-              <div class="chart-stat-value roll" id="r-right-min">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Max</div>
-              <div class="chart-stat-value roll" id="r-right-max">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Avg</div>
-              <div class="chart-stat-value roll" id="r-right-avg">—</div>
-            </div>
-          </div>
+        <div class="comp-item">
+          <label class="comp-label">Target 3</label>
+          <select class="comp-select" id="target-3">
+            <option value="">None</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+            <option value="center">Center</option>
+            <option value="chassis">Chassis</option>
+          </select>
         </div>
+      </div>
+      <div class="table-wrapper" id="table-wrapper" style="display:none">
+        <table class="deviation-table" id="deviation-table">
+          <thead>
+            <tr id="table-head-row">
+              <th>Sensor</th>
+              <th id="th-v1">Value 1</th>
+              <th id="th-v2">Value 2</th>
+              <th id="th-d1">Δ Value 1</th>
+              <th id="th-d2">Δ Value 2</th>
+            </tr>
+          </thead>
+          <tbody id="dev-tbody"></tbody>
+        </table>
+      </div>
+      <div id="comp-msg" class="comp-msg">Select a reference IMU to compare sensors</div>
+    </div>
 
-        <!-- CENTER PITCH -->
-        <div class="chart-card">
-          <div class="chart-header">
-            <div class="chart-title">Center Pitch</div>
-            <div class="chart-tag">deg</div>
-          </div>
-          <div class="chart-container">
-            <canvas id="ch-pitch-center"></canvas>
-          </div>
-          <div class="chart-stats">
-            <div class="chart-stat">
-              <div class="chart-stat-label">Min</div>
-              <div class="chart-stat-value" id="p-center-min">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Max</div>
-              <div class="chart-stat-value" id="p-center-max">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Avg</div>
-              <div class="chart-stat-value" id="p-center-avg">—</div>
-            </div>
-          </div>
+    <!-- LEGEND -->
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-color" style="background:#f59e0b"></div>
+        <div class="legend-text">
+          <div class="legend-name" style="color:#f59e0b">Left</div>
+          <div class="legend-desc">Amber</div>
         </div>
-
-        <!-- CENTER ROLL -->
-        <div class="chart-card">
-          <div class="chart-header">
-            <div class="chart-title">Center Roll</div>
-            <div class="chart-tag">deg</div>
-          </div>
-          <div class="chart-container">
-            <canvas id="ch-roll-center"></canvas>
-          </div>
-          <div class="chart-stats">
-            <div class="chart-stat">
-              <div class="chart-stat-label">Min</div>
-              <div class="chart-stat-value roll" id="r-center-min">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Max</div>
-              <div class="chart-stat-value roll" id="r-center-max">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Avg</div>
-              <div class="chart-stat-value roll" id="r-center-avg">—</div>
-            </div>
-          </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background:#34d399"></div>
+        <div class="legend-text">
+          <div class="legend-name" style="color:#34d399">Right</div>
+          <div class="legend-desc">Emerald</div>
         </div>
-
-        <!-- CHASSIS PITCH -->
-        <div class="chart-card">
-          <div class="chart-header">
-            <div class="chart-title">Chassis Pitch</div>
-            <div class="chart-tag">deg</div>
-          </div>
-          <div class="chart-container">
-            <canvas id="ch-pitch-chassis"></canvas>
-          </div>
-          <div class="chart-stats">
-            <div class="chart-stat">
-              <div class="chart-stat-label">Min</div>
-              <div class="chart-stat-value" id="p-chassis-min">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Max</div>
-              <div class="chart-stat-value" id="p-chassis-max">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Avg</div>
-              <div class="chart-stat-value" id="p-chassis-avg">—</div>
-            </div>
-          </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background:#60a5fa"></div>
+        <div class="legend-text">
+          <div class="legend-name" style="color:#60a5fa">Center</div>
+          <div class="legend-desc">Sky Blue</div>
         </div>
-
-        <!-- CHASSIS ROLL -->
-        <div class="chart-card">
-          <div class="chart-header">
-            <div class="chart-title">Chassis Roll</div>
-            <div class="chart-tag">deg</div>
-          </div>
-          <div class="chart-container">
-            <canvas id="ch-roll-chassis"></canvas>
-          </div>
-          <div class="chart-stats">
-            <div class="chart-stat">
-              <div class="chart-stat-label">Min</div>
-              <div class="chart-stat-value roll" id="r-chassis-min">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Max</div>
-              <div class="chart-stat-value roll" id="r-chassis-max">—</div>
-            </div>
-            <div class="chart-stat">
-              <div class="chart-stat-label">Avg</div>
-              <div class="chart-stat-value roll" id="r-chassis-avg">—</div>
-            </div>
-          </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background:#c084fc"></div>
+        <div class="legend-text">
+          <div class="legend-name" style="color:#c084fc">Chassis</div>
+          <div class="legend-desc">Violet</div>
         </div>
-
       </div>
     </div>
 
-  </div>
-</div>
+    <!-- GRAPH -->
+    <div class="graph-card">
+      <div class="graph-header">
+        <div class="graph-title-group">
+          <div class="graph-title" id="graph-title">Pitch &amp; Roll</div>
+          <div class="graph-unit" id="graph-unit">deg</div>
+        </div>
+        <div class="graph-controls">
+          <!-- Zoom Mode Toggle -->
+          <button class="zoom-mode-btn" id="zoom-mode-btn" title="Toggle zoom mode — scroll to zoom only when ON">🔍 Zoom: OFF</button>
+          <!-- Zoom +/− group -->
+          <div class="zoom-group">
+            <button class="zoom-btn" id="zoom-in" title="Zoom In">＋</button>
+            <button class="zoom-btn" id="zoom-out" title="Zoom Out">－</button>
+          </div>
+          <!-- Reset solo -->
+          <button class="zoom-btn-solo" id="reset-zoom" title="Reset Zoom">Reset</button>
+          <!-- Expand solo -->
+          <button class="zoom-btn-solo" id="expand-btn" title="Toggle Expand">⬚ Expand</button>
+        </div>
+      </div>
+
+      <div class="graph-container" id="graph-container">
+        <canvas id="main-chart"></canvas>
+        <div class="hover-legend hidden" id="hover-legend"></div>
+      </div>
+      <div class="help-text" id="help-text">Enable Zoom Mode to scroll-zoom &nbsp;|&nbsp; ⟷ Drag to pan (always on) &nbsp;|&nbsp; Reset clears zoom</div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /dashboard -->
 
 <script>
-// ─── CONFIG ─────────────────────────────────────────────────────────────────
-const THRESHOLDS = {
-  pitch_warn_deg:    10.0,
-  pitch_danger_deg:  15.0,
-  roll_warn_deg:     10.0,
-  roll_danger_deg:   15.0,
+Chart.register(ChartZoom);
+
+const SENSORS = ['left','right','center','chassis'];
+const COLORS  = { left:'#f59e0b', right:'#34d399', center:'#60a5fa', chassis:'#c084fc' };
+
+// Column names keyed by dataType
+const COL_NAMES = {
+  'pitch-roll': { v1:'Pitch', v2:'Roll',   d1:'Δ Pitch', d2:'Δ Roll'  },
+  'accel':      { v1:'Accel X', v2:'Accel Y', d1:'Δ AX',    d2:'Δ AY'   },
+  'gyro':       { v1:'Gyro X',  v2:'Gyro Y',  d1:'Δ GX',    d2:'Δ GY'   }
 };
 
-const SENSORS = ['left', 'right', 'center', 'chassis'];
-let sensorData = { left: {}, right: {}, center: {}, chassis: {} };
-let pHist = { left: [], right: [], center: [], chassis: [] };
-let rHist = { left: [], right: [], center: [], chassis: [] };
+let sensorData = { left:{}, right:{}, center:{}, chassis:{} };
+let pktCount = 0, startMs = null, lastMs = 0, fpsWin = [];
+let currentDataType = 'pitch-roll';
+let isExpanded = false;
+let refSensor = '', targets = {};
 
-// ─── CHART FACTORY ───────────────────────────────────────────────────────────
-const MAX_PTS = 150;
-const charts = {};
+const chart = mkMainChart();
 
-function mkChart(id, color) {
-  const el = document.getElementById(id);
-  if (!el) return null;
+function mkMainChart(){
+  const el = document.getElementById('main-chart');
+  if(!el) return null;
+  const datasets = [];
+  SENSORS.forEach(sensor => {
+    datasets.push({
+      label:`${sensor}-1`, data:[],
+      borderColor:COLORS[sensor], backgroundColor:'transparent',
+      borderWidth:2.5, pointRadius:0, tension:0.3, fill:false, spanGaps:true
+    });
+    datasets.push({
+      label:`${sensor}-2`, data:[],
+      borderColor:COLORS[sensor], backgroundColor:'transparent',
+      borderWidth:2.5, borderDash:[5,4],
+      pointRadius:0, tension:0.3, fill:false, spanGaps:true
+    });
+  });
   return new Chart(el.getContext('2d'), {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [{
-        data: [],
-        borderColor: color,
-        backgroundColor: color + '20',
-        borderWidth: 2.5,
-        pointRadius: 0,
-        tension: 0.4,
-        fill: true
-      }]
-    },
-    options: {
-      animation: false,
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { enabled: false }
+    type:'line',
+    data:{ labels:[], datasets },
+    options:{
+      animation:false,
+      responsive:true,
+      maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{ display:false },
+        zoom:{
+          zoom:{ wheel:{ enabled:true, speed:0.08 }, pinch:{ enabled:true }, mode:'xy' },
+          pan:{ enabled:true, mode:'xy' }
+        },
+        tooltip:{ enabled:false, external:externalTooltip }
       },
-      scales: {
-        x: { display: false },
-        y: {
-          ticks: { color: '#64748b', font: { family: "'Inter'", size: 10 }, maxTicksLimit: 3 },
-          grid: { color: 'rgba(226, 232, 240, 0.6)' },
-          border: { color: 'rgba(226, 232, 240, 0.4)' }
+      scales:{
+        x:{ display:false },
+        y:{
+          ticks:{
+            color:'#8e99ad',
+            font:{ family:"'IBM Plex Mono'", size:11 },
+            maxTicksLimit:6
+          },
+          grid:{ color:'rgba(0,0,0,0.06)', drawBorder:false },
+          border:{ display:false }
         }
       }
     }
   });
 }
 
-function initCharts() {
-  SENSORS.forEach(sensor => {
-    charts[`pitch-${sensor}`] = mkChart(`ch-pitch-${sensor}`, '#0ea5e9');
-    charts[`roll-${sensor}`] = mkChart(`ch-roll-${sensor}`, '#8b5cf6');
+function externalTooltip(context){
+  const { chart, tooltip } = context;
+  const box = document.getElementById('hover-legend');
+  if(tooltip.opacity === 0){ box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+
+  const dataPoints = tooltip.dataPoints || [];
+  let html = `<div class="hover-ts">t = ${dataPoints[0]?.label || '—'}</div>`;
+
+  dataPoints.forEach(point => {
+    const dsIndex = point.datasetIndex;
+    const sensorName = SENSORS[Math.floor(dsIndex/2)];
+    const isSecond   = dsIndex % 2 === 1;
+    const col = COL_NAMES[currentDataType];
+    const label = isSecond ? col.v2 : col.v1;
+    const color = COLORS[sensorName];
+    const value = point.parsed.y;
+    html += `
+      <div class="hover-value">
+        <div class="hover-dot" style="background:${color}"></div>
+        <div class="hover-label">${sensorName} · ${label}</div>
+        <div class="hover-val">${value.toFixed(3)}</div>
+      </div>`;
   });
-}
-initCharts();
 
-function pushChart(name, val) {
-  const c = charts[name];
-  if (!c) return;
-  c.data.labels.push('');
-  c.data.datasets[0].data.push(val);
-  if (c.data.labels.length > MAX_PTS) {
-    c.data.labels.shift();
-    c.data.datasets[0].data.shift();
-  }
-  c.update('none');
+  box.innerHTML = html;
+  const { offsetLeft:posX, offsetTop:posY } = chart.canvas;
+  const { x, y } = tooltip;
+  box.style.left = (posX + x + 14) + 'px';
+  box.style.top  = (posY + y - 60)  + 'px';
 }
 
-// ─── ARTIFICIAL HORIZON ───────────────────────────────────────────────────────
-const horizonCtx = {};
+function updateTableHeaders(){
+  const col = COL_NAMES[currentDataType];
+  document.getElementById('th-v1').textContent = col.v1;
+  document.getElementById('th-v2').textContent = col.v2;
+  document.getElementById('th-d1').textContent = col.d1;
+  document.getElementById('th-d2').textContent = col.d2;
+}
 
-function initHorizons() {
+function pushDataToChart(type){
+  if(!chart) return;
+  chart.data.labels.push('');
+  let dsIdx = 0;
   SENSORS.forEach(sensor => {
-    const cv = document.getElementById(`cv-horizon-${sensor}`);
-    if (cv) horizonCtx[sensor] = cv.getContext('2d');
+    const f = sensorData[sensor];
+    if(!f){ chart.data.datasets[dsIdx++].data.push(null); chart.data.datasets[dsIdx++].data.push(null); return; }
+    let v1, v2;
+    if(type === 'pitch-roll'){ v1 = +(f.pitch_deg ?? 0); v2 = +(f.roll_deg ?? 0); }
+    else if(type === 'accel') { v1 = +(f.ax_g    ?? 0); v2 = +(f.ay_g   ?? 0); }
+    else if(type === 'gyro')  { v1 = +(f.gx_dps  ?? 0); v2 = +(f.gy_dps ?? 0); }
+    chart.data.datasets[dsIdx++].data.push(v1);
+    chart.data.datasets[dsIdx++].data.push(v2);
   });
+  if(chart.data.labels.length > 300){
+    chart.data.labels.shift();
+    chart.data.datasets.forEach(ds => ds.data.shift());
+  }
+  chart.update('none');
 }
-initHorizons();
 
-function drawHorizon(sensor, pitch, roll) {
-  const ctx = horizonCtx[sensor];
-  if (!ctx) return;
+function updateDeviationTable(){
+  const wrapper = document.getElementById('table-wrapper');
+  const tbody   = document.getElementById('dev-tbody');
+  const msg     = document.getElementById('comp-msg');
 
-  const W = 140, H = 140, cx = 70, cy = 70, R = 70;
-  ctx.clearRect(0, 0, W, H);
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(cx, cy, R, 0, Math.PI * 2);
-  ctx.clip();
-
-  const rad = roll * Math.PI / 180;
-  const py = (pitch / 90) * R;
-
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(-rad);
-
-  // Sky
-  const sg = ctx.createLinearGradient(0, -R, 0, 0);
-  sg.addColorStop(0, '#87ceeb');
-  sg.addColorStop(1, '#b0e0e6');
-  ctx.fillStyle = sg;
-  ctx.fillRect(-R, -R - py, R * 2, R);
-
-  // Ground
-  const gg = ctx.createLinearGradient(0, 0, 0, R);
-  gg.addColorStop(0, '#8b7355');
-  gg.addColorStop(1, '#654321');
-  ctx.fillStyle = gg;
-  ctx.fillRect(-R, -py, R * 2, R);
-
-  // Horizon line
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(-R, -py);
-  ctx.lineTo(R, -py);
-  ctx.stroke();
-
-  // Pitch markers
-  for (let d = -30; d <= 30; d += 10) {
-    if (!d) continue;
-    const y = -py - (d / 90) * R;
-    const w = Math.abs(d) % 20 === 0 ? 25 : 15;
-    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(-w, y);
-    ctx.lineTo(w, y);
-    ctx.stroke();
+  if(!refSensor || (!targets[1] && !targets[2] && !targets[3])){
+    wrapper.style.display = 'none';
+    msg.textContent = 'Select a reference IMU and at least one target to compare';
+    return;
   }
 
-  ctx.restore();
+  const refData = sensorData[refSensor];
+  if(!refData){ wrapper.style.display = 'none'; msg.textContent = 'Waiting for reference sensor data…'; return; }
 
-  // Wing marker
-  ctx.strokeStyle = '#ffcc00';
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(cx - 30, cy);
-  ctx.lineTo(cx - 8, cy);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(cx + 8, cy);
-  ctx.lineTo(cx + 30, cy);
-  ctx.stroke();
+  let rV1, rV2;
+  if(currentDataType === 'pitch-roll'){ rV1 = +(refData.pitch_deg ?? 0); rV2 = +(refData.roll_deg ?? 0); }
+  else if(currentDataType === 'accel'){ rV1 = +(refData.ax_g ?? 0);     rV2 = +(refData.ay_g  ?? 0);   }
+  else if(currentDataType === 'gyro') { rV1 = +(refData.gx_dps ?? 0);   rV2 = +(refData.gy_dps ?? 0);  }
 
-  // Center dot
-  ctx.fillStyle = '#ffcc00';
-  ctx.beginPath();
-  ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
-  ctx.fill();
+  updateTableHeaders();
+  tbody.innerHTML = '';
 
-  ctx.restore();
+  [1,2,3].forEach(n => {
+    const tSensor = targets[n];
+    if(!tSensor) return;
+    const tData = sensorData[tSensor];
+    if(!tData) return;
+
+    let tV1, tV2;
+    if(currentDataType === 'pitch-roll'){ tV1 = +(tData.pitch_deg ?? 0); tV2 = +(tData.roll_deg ?? 0); }
+    else if(currentDataType === 'accel'){ tV1 = +(tData.ax_g ?? 0);     tV2 = +(tData.ay_g  ?? 0);   }
+    else if(currentDataType === 'gyro') { tV1 = +(tData.gx_dps ?? 0);   tV2 = +(tData.gy_dps ?? 0);  }
+
+    const d1 = tV1 - rV1, d2 = tV2 - rV2;
+    const cls1 = d1 > 0.05 ? 'dev-positive' : d1 < -0.05 ? 'dev-negative' : 'dev-neutral';
+    const cls2 = d2 > 0.05 ? 'dev-positive' : d2 < -0.05 ? 'dev-negative' : 'dev-neutral';
+    const arrow1 = d1 > 0.05 ? '▲' : d1 < -0.05 ? '▼' : '●';
+    const arrow2 = d2 > 0.05 ? '▲' : d2 < -0.05 ? '▼' : '●';
+    const color  = COLORS[tSensor];
+
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td><div class="dev-sensor">
+        <div class="dev-sensor-dot" style="background:${color}"></div>
+        ${tSensor}
+      </div></td>
+      <td class="dev-value">${tV1.toFixed(3)}</td>
+      <td class="dev-value">${tV2.toFixed(3)}</td>
+      <td><span class="dev-delta ${cls1}">${arrow1} ${d1 > 0 ? '+' : ''}${d1.toFixed(3)}</span></td>
+      <td><span class="dev-delta ${cls2}">${arrow2} ${d2 > 0 ? '+' : ''}${d2.toFixed(3)}</span></td>`;
+    tbody.appendChild(row);
+  });
+
+  wrapper.style.display = 'block';
+  msg.textContent = '';
 }
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-function $t(id, v) {
-  const e = document.getElementById(id);
-  if (e) e.textContent = v;
-}
+function $t(id,v){ const e = document.getElementById(id); if(e) e.textContent = v; }
 
-function arrStats(a) {
-  if (!a.length) return { min: 0, max: 0, avg: 0 };
-  return {
-    min: Math.min(...a),
-    max: Math.max(...a),
-    avg: a.reduce((x, y) => x + y, 0) / a.length
-  };
-}
-
-function updateThreshChip(id, val, warnLvl, dangerLvl) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const absVal = Math.abs(val);
-  if (absVal >= dangerLvl) {
-    el.className = 'thr-indicator danger';
-  } else if (absVal >= warnLvl) {
-    el.className = 'thr-indicator warn';
-  } else {
-    el.className = 'thr-indicator ok';
-  }
-}
-
-// ─── STATE & PROCESSING ─────────────────────────────────────────────────────
-let pktCount = 0, startMs = null, lastMs = 0, fpsWin = [];
-
-function onIMUPayload(payload) {
+function onIMUPayload(payload){
   pktCount++;
-  if (!startMs) startMs = Date.now();
-
+  if(!startMs) startMs = Date.now();
   const now = Date.now();
-  if (lastMs) {
-    fpsWin.push(1000 / (now - lastMs));
-    if (fpsWin.length > 12) fpsWin.shift();
-  }
+  if(lastMs){ fpsWin.push(1000/(now-lastMs)); if(fpsWin.length>12) fpsWin.shift(); }
   lastMs = now;
-  const fps = fpsWin.length ? (fpsWin.reduce((a, b) => a + b, 0) / fpsWin.length) : 0;
-
-  SENSORS.forEach(sensor => {
-    const f = payload[sensor];
-    if (!f) return;
-
-    sensorData[sensor] = f;
-    const pitch = +(f.pitch_deg ?? 0);
-    const roll = +(f.roll_deg ?? 0);
-
-    // Horizon
-    drawHorizon(sensor, pitch, roll);
-
-    // Attitude display
-    $t(`att-pitch-${sensor}`, pitch.toFixed(1) + '°');
-    $t(`att-roll-${sensor}`, roll.toFixed(1) + '°');
-
-    // Thresholds
-    updateThreshChip(`tc-pitch-${sensor}`, pitch, THRESHOLDS.pitch_warn_deg, THRESHOLDS.pitch_danger_deg);
-    updateThreshChip(`tc-roll-${sensor}`, roll, THRESHOLDS.roll_warn_deg, THRESHOLDS.roll_danger_deg);
-
-    // Badge
-    const badge = document.getElementById(`badge-${sensor}`);
-    if (badge) {
-      if (!f.valid) {
-        badge.className = 'sensor-badge err';
-        document.getElementById(`badge-${sensor}-text`).textContent = 'invalid';
-      } else if (Math.abs(pitch) >= THRESHOLDS.pitch_danger_deg || Math.abs(roll) >= THRESHOLDS.roll_danger_deg) {
-        badge.className = 'sensor-badge warn';
-        document.getElementById(`badge-${sensor}-text`).textContent = 'warning';
-      } else {
-        badge.className = 'sensor-badge ok';
-        document.getElementById(`badge-${sensor}-text`).textContent = 'valid';
-      }
-    }
-
-    // History
-    pHist[sensor].push(pitch);
-    if (pHist[sensor].length > 500) pHist[sensor].shift();
-    rHist[sensor].push(roll);
-    if (rHist[sensor].length > 500) rHist[sensor].shift();
-
-    // Charts
-    pushChart(`pitch-${sensor}`, pitch);
-    pushChart(`roll-${sensor}`, roll);
-
-    // Stats
-    const ps = arrStats(pHist[sensor]);
-    const rs = arrStats(rHist[sensor]);
-    $t(`p-${sensor}-min`, ps.min.toFixed(2));
-    $t(`p-${sensor}-max`, ps.max.toFixed(2));
-    $t(`p-${sensor}-avg`, ps.avg.toFixed(2));
-    $t(`r-${sensor}-min`, rs.min.toFixed(2));
-    $t(`r-${sensor}-max`, rs.max.toFixed(2));
-    $t(`r-${sensor}-avg`, rs.avg.toFixed(2));
-  });
-
+  const fps = fpsWin.length ? fpsWin.reduce((a,b)=>a+b,0)/fpsWin.length : 0;
+  SENSORS.forEach(s => { const f = payload[s]; if(f) sensorData[s] = f; });
+  pushDataToChart(currentDataType);
+  updateDeviationTable();
   $t('sb-pkts', pktCount);
-  $t('sb-fps', fps.toFixed(1));
+  $t('sb-fps',  fps.toFixed(1) + ' Hz');
 }
 
-// ─── CLOCK ────────────────────────────────────────────────────────────────────
 setInterval(() => {
-  $t('nav-clock', new Date().toTimeString().slice(0, 8));
-  if (startMs) $t('sb-uptime', Math.floor((Date.now() - startMs) / 1000) + 's');
+  $t('nav-clock', new Date().toTimeString().slice(0,8));
+  if(startMs) $t('sb-uptime', Math.floor((Date.now()-startMs)/1000) + 's');
 }, 1000);
 
-// ─── MQTT ─────────────────────────────────────────────────────────────────────
+document.getElementById('data-select').addEventListener('change', e => {
+  currentDataType = e.target.value;
+  const titles = {
+    'pitch-roll':'Pitch (—) &amp; Roll (⚬⚬)',
+    'accel':'Accel X (—) &amp; Y (⚬⚬)',
+    'gyro':'Gyro X (—) &amp; Y (⚬⚬)'
+  };
+  const units = { 'pitch-roll':'deg', 'accel':'g', 'gyro':'dps' };
+  document.getElementById('graph-title').innerHTML = titles[currentDataType];
+  $t('graph-unit', units[currentDataType]);
+  if(chart){ chart.data.labels = []; chart.data.datasets.forEach(ds => ds.data = []); chart.update(); }
+  updateDeviationTable();
+});
+
+document.getElementById('ref-sensor').addEventListener('change', e => { refSensor = e.target.value; updateDeviationTable(); });
+
+['target-1','target-2','target-3'].forEach((id, idx) => {
+  document.getElementById(id).addEventListener('change', e => { targets[idx+1] = e.target.value; updateDeviationTable(); });
+});
+
+// ── Zoom Mode Toggle ──
+let zoomModeOn = false;
+
+function setZoomMode(on){
+  zoomModeOn = on;
+  const btn = document.getElementById('zoom-mode-btn');
+  const container = document.getElementById('graph-container');
+  const helpText  = document.getElementById('help-text');
+  if(on){
+    btn.textContent = '🔍 Zoom: ON';
+    btn.classList.add('on');
+    container.classList.add('zoom-active');
+    helpText.textContent = 'Zoom Mode ON — scroll to zoom · drag to pan · click Zoom: ON to disable';
+    if(chart) chart.options.plugins.zoom.zoom.wheel.enabled = true;
+  } else {
+    btn.textContent = '🔍 Zoom: OFF';
+    btn.classList.remove('on');
+    container.classList.remove('zoom-active');
+    helpText.textContent = 'Enable Zoom Mode to scroll-zoom · ⟷ Drag to pan (always on) · Reset clears zoom';
+    if(chart) chart.options.plugins.zoom.zoom.wheel.enabled = false;
+  }
+  if(chart) chart.update('none');
+}
+
+// Start with scroll zoom DISABLED
+setZoomMode(false);
+
+document.getElementById('zoom-mode-btn').addEventListener('click', () => setZoomMode(!zoomModeOn));
+
+// ── Zoom: +, −, Reset ──
+document.getElementById('zoom-in').addEventListener('click',    () => { if(chart) chart.zoom(1.25); });
+document.getElementById('zoom-out').addEventListener('click',   () => { if(chart) chart.zoom(0.8); });
+document.getElementById('reset-zoom').addEventListener('click', () => { if(chart) chart.resetZoom(); });
+
+document.getElementById('expand-btn').addEventListener('click', () => {
+  isExpanded = !isExpanded;
+  document.getElementById('graph-container').classList.toggle('zoomed');
+  if(chart) chart.resize();
+});
+
+// ── MQTT ──
 let client = null;
 
-function badge(s) {
+function badge(s){
   const b = document.getElementById('conn-badge');
-  const m = { ok: ['ok', 'Connected'], mid: ['mid', 'Connecting…'], bad: ['bad', 'Offline'] };
+  const m = { ok:['ok','Connected'], mid:['mid','Connecting…'], bad:['bad','Offline'] };
   b.className = 'badge ' + m[s][0];
   b.querySelector('span').textContent = m[s][1];
 }
 
-document.getElementById('cfg-proto').addEventListener('change', function () {
+document.getElementById('cfg-proto').addEventListener('change', function(){
   document.getElementById('cfg-port').value = this.value === 'wss' ? '8084' : '8083';
 });
 
 document.getElementById('btn-connect').addEventListener('click', () => {
-  const host = document.getElementById('cfg-host').value.trim() || 'broker.emqx.io';
+  const host  = document.getElementById('cfg-host').value.trim() || 'broker.emqx.io';
   const proto = document.getElementById('cfg-proto').value;
-  const port = +document.getElementById('cfg-port').value || 8084;
-  const base = document.getElementById('cfg-topic').value.trim().replace(/\/+$/, '') || 'boom/nandi01';
-  const user = document.getElementById('cfg-user').value.trim();
-  const pass = document.getElementById('cfg-pass').value;
+  const port  = +document.getElementById('cfg-port').value || 8084;
+  const base  = document.getElementById('cfg-topic').value.trim().replace(/\/+$/,'') || 'boom/nandi01';
+  const user  = document.getElementById('cfg-user').value.trim();
+  const pass  = document.getElementById('cfg-pass').value;
   const mqttv = +document.getElementById('cfg-mqttver').value;
 
   badge('mid');
-
   const opts = {
-    clientId: 'boom-dash-' + Math.random().toString(16).slice(2, 8),
-    clean: true,
-    connectTimeout: 8000,
-    protocolVersion: mqttv,
+    clientId:'boom-dash-' + Math.random().toString(16).slice(2,8),
+    clean:true, connectTimeout:8000, protocolVersion:mqttv
   };
-  if (user) { opts.username = user; opts.password = pass; }
+  if(user){ opts.username = user; opts.password = pass; }
 
   const url = `${proto}://${host}:${port}/mqtt`;
   client = mqtt.connect(url, opts);
@@ -1343,37 +1339,29 @@ document.getElementById('btn-connect').addEventListener('click', () => {
     badge('ok');
     startMs = Date.now();
     client.subscribe(base + '/imu');
-    $t('nav-topic', base + '/imu');
     document.getElementById('connect-screen').style.display = 'none';
     document.getElementById('dashboard').classList.add('show');
   });
 
-  client.on('error', e => { badge('bad'); });
-  client.on('close', () => { badge('bad'); });
+  client.on('error',   () => badge('bad'));
+  client.on('close',   () => badge('bad'));
   client.on('offline', () => badge('mid'));
 
   client.on('message', (topic, msg) => {
-    try {
+    try{
       const payload = JSON.parse(msg.toString());
-      if (topic.includes('/imu')) {
-        onIMUPayload(payload);
-      }
-    } catch (e) { }
+      if(topic.includes('/imu')) onIMUPayload(payload);
+    } catch(e){}
   });
 });
 
 document.getElementById('btn-disconnect').addEventListener('click', () => {
-  if (client) { client.end(); client = null; }
+  if(client){ client.end(); client = null; }
   badge('bad');
   document.getElementById('connect-screen').style.display = 'flex';
   document.getElementById('dashboard').classList.remove('show');
-  startMs = null;
-  pktCount = 0;
-  SENSORS.forEach(s => {
-    pHist[s] = [];
-    rHist[s] = [];
-    sensorData[s] = {};
-  });
+  startMs = null; pktCount = 0;
+  SENSORS.forEach(s => { sensorData[s] = {}; });
   fpsWin = [];
 });
 </script>
